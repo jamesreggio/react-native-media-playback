@@ -1,4 +1,5 @@
 import {NativeModules, NativeEventEmitter} from 'react-native';
+import debounce from 'lodash.debounce';
 
 const NativePlayback = NativeModules.RNMediaPlayback;
 const NativeEvents = new NativeEventEmitter(NativePlayback);
@@ -21,10 +22,20 @@ export class PlaybackItem {
   }
 
   addListener(callback) {
+    callback = debounce(callback, 150);
+    let lastEvent;
+
     return NativeEvents.addListener('updated', payload => {
-      if (activeItem === this) {
-        callback(payload);
+      if (activeItem !== this) {
+        return;
       }
+
+      if (lastEvent !== payload.event) {
+        callback.flush();
+      }
+
+      lastEvent = payload.event;
+      callback(payload);
     });
   }
 
@@ -94,6 +105,11 @@ export class PlaybackItem {
   async getDuration() {
     this.requireStatus('PREPARED', 'ACTIVATED');
     return await NativePlayback.getDurationForItem(this.key);
+  }
+
+  async getStatus() {
+    this.requireStatus('ACTIVATED');
+    return await NativePlayback.getStatus();
   }
 
   async setBuffer(amount) {

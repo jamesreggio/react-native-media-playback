@@ -1,6 +1,9 @@
 {
 	"name": "react-native-media-playback",
 	"version": "0.1.0",
+	"dependencies": {
+		"lodash.debounce": "^4.0.8"
+	},
 	"peerDependencies": {
 		"react-native": ">=0.40.0"
 	}

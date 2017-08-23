@@ -1,6 +1,7 @@
 #import "RCTPromise.h"
 #import "RNMediaPlayback.h"
 #import <React/RCTAssert.h>
+#import <React/RCTUtils.h>
 
 @import AVFoundation;
 
@@ -33,8 +34,20 @@ RCT_EXPORT_MODULE()
     _promises = [NSMutableDictionary dictionary];
     _player = [AVQueuePlayer queuePlayerWithItems:@[]];
     _rate = 1.0f;
+
+    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+    [notificationCenter addObserver:self selector:@selector(itemDidFinish:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
+    [notificationCenter addObserver:self selector:@selector(itemDidFinishWithError:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
+    _player.actionAtItemEnd = AVPlayerActionAtItemEndPause;
   }
   return self;
+}
+
+- (void)dealloc
+{
+  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
+  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
 }
 
 - (dispatch_queue_t)methodQueue
@@ -85,7 +98,7 @@ RCT_EXPORT_MODULE()
 
 - (void)removePromiseForKey:(NSNumber *)key
 {
-  RCTAssert(_promises[key], @"RCTPromise key not in use");
+  // No assertion since we will attempt to remove the promise during release.
   [_promises removeObjectForKey:key];
 }
 
@@ -99,29 +112,17 @@ RCT_EXPORT_MODULE()
 - (void)sendUpdate
 {
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
-  AVPlayerTimeControlStatus status = _player.timeControlStatus;
+  body[@"position"] = self.playerPosition;
+  body[@"status"] = self.playerStatus;
 
-  switch (status) {
-    case AVPlayerTimeControlStatusPaused:
-      body[@"status"] = @"PAUSED";
-      break;
-    case AVPlayerTimeControlStatusPlaying:
 #ifdef PLAYBACK_DEBUG
-      if (_preparedAt) {
-        NSTimeInterval playbackTime = [[NSDate date] timeIntervalSinceDate:_preparedAt];
-        NSLog(@"[playback.native] time to play: %f", playbackTime);
-        _preparedAt = nil;
-      }
-#endif
-      body[@"status"] = @"PLAYING";
-      break;
-    case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
-      body[@"status"] = @"STALLED";
-      break;
+  if (_preparedAt && [body[@"status"] isEqual:@"PLAYING"]) {
+    NSTimeInterval playbackTime = [[NSDate date] timeIntervalSinceDate:_preparedAt];
+    NSLog(@"[playback.native] time to play: %f", playbackTime);
+    _preparedAt = nil;
   }
+#endif
 
-  body[@"position"] = @(CMTimeGetSeconds(_player.currentTime));
-  NSLog(@"[playback.native] update %@", body);
   [self sendEventWithName:@"updated" body:body];
 }
 
@@ -150,7 +151,7 @@ RCT_EXPORT_MODULE()
           promise.resolve(payload);
           break;
         case AVPlayerItemStatusFailed:
-          promise.reject(nil, nil, item.error); //XXX
+          promise.reject(@"PLAYBACK_LOAD_FAILURE", @"The item failed to load", item.error);
           break;
         case AVPlayerItemStatusUnknown:
           return;
@@ -161,6 +162,37 @@ RCT_EXPORT_MODULE()
   } else {
     [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
   }
+}
+
+- (void)itemDidFinish:(NSNotification*)notification {
+  dispatch_async([self methodQueue], ^{
+    RCTAssert(
+      notification.object == self.player.currentItem,
+      @"Received notification for non-current AVPlayerItem"
+    );
+
+    NSMutableDictionary *body = [NSMutableDictionary dictionary];
+    body[@"position"] = self.playerPosition;
+    body[@"status"] = @"FINISHED";
+
+    [self sendEventWithName:@"updated" body:body];
+  });
+}
+
+- (void)itemDidFinishWithError:(NSNotification*)notification {
+  dispatch_async([self methodQueue], ^{
+    RCTAssert(
+      notification.object == self.player.currentItem,
+      @"Received notification for non-current AVPlayerItem"
+    );
+
+    NSMutableDictionary *body = [NSMutableDictionary dictionary];
+    body[@"position"] = self.playerPosition;
+    body[@"status"] = @"FINISHED";
+    body[@"error"] = notification.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
+
+    [self sendEventWithName:@"updated" body:body];
+  });
 }
 
 #pragma mark - AVAudioSession
@@ -219,7 +251,7 @@ RCT_EXPORT_MODULE()
   [session setCategory:category mode:mode options:0 error:nil];
 }
 
-#pragma mark - AVPlayerItems
+#pragma mark - AVPlayerItem
 
 #define DEFAULT_UPDATE_INTERVAL 30
 
@@ -293,6 +325,7 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
 
   [_player removeItem:item];
   [self removeItemForKey:key];
+  [self removePromiseForKey:key];
   resolve(nil);
 }
 
@@ -335,7 +368,7 @@ RCT_EXPORT_METHOD(setBufferForItem:(nonnull NSNumber *)key
   resolve(nil);
 }
 
-#pragma mark - Player
+#pragma mark - AVPlayer
 
 - (AVPlayer *)player
 {
@@ -343,11 +376,59 @@ RCT_EXPORT_METHOD(setBufferForItem:(nonnull NSNumber *)key
   return _player;
 }
 
+- (NSNumber *)playerPosition
+{
+  return @(CMTimeGetSeconds(self.player.currentTime));
+}
+
+RCT_REMAP_METHOD(getPosition,
+                 getPositionWithResolver:(RCTPromiseResolveBlock)resolve
+                                rejecter:(RCTPromiseRejectBlock)reject)
+{
+  resolve(self.playerPosition);
+}
+
+- (NSString *)playerStatus
+{
+  AVPlayerTimeControlStatus status = self.player.timeControlStatus;
+
+  switch (status) {
+    case AVPlayerTimeControlStatusPaused:
+      return @"PAUSED";
+    case AVPlayerTimeControlStatusPlaying:
+      return @"PLAYING";
+    case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
+      return @"STALLED";
+  }
+}
+
+RCT_REMAP_METHOD(getStatus,
+                 getStatusWithResolver:(RCTPromiseResolveBlock)resolve
+                              rejecter:(RCTPromiseRejectBlock)reject)
+{
+  resolve(self.playerStatus);
+}
+
+RCT_EXPORT_METHOD(setRate:(nonnull NSNumber *)rate
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+  AVPlayer *player = self.player;
+
+  // Only update the player rate directly if it's playing.
+  if (player.rate == _rate) {
+    player.rate = rate.floatValue;
+  }
+
+  _rate = rate.floatValue;
+  resolve(nil);
+}
+
 RCT_REMAP_METHOD(play,
                  playWithResolver:(RCTPromiseResolveBlock)resolve
                          rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVPlayer *player = [self player];
+  AVPlayer *player = self.player;
   player.rate = _rate;
   resolve(nil);
 }
@@ -356,29 +437,8 @@ RCT_REMAP_METHOD(pause,
                  pauseWithResolver:(RCTPromiseResolveBlock)resolve
                           rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVPlayer *player = [self player];
+  AVPlayer *player = self.player;
   player.rate = 0.0f;
-  resolve(nil);
-}
-
-RCT_REMAP_METHOD(getPosition,
-                 getPositionWithResolve:(RCTPromiseResolveBlock)resolve
-                 rejecter:(RCTPromiseRejectBlock)reject)
-{
-  AVPlayer *player = [self player];
-  NSTimeInterval position = CMTimeGetSeconds(player.currentTime);
-  resolve(@(position));
-}
-
-RCT_EXPORT_METHOD(setRate:(nonnull NSNumber *)rate
-                 resolver:(RCTPromiseResolveBlock)resolve
-                 rejecter:(RCTPromiseRejectBlock)reject)
-{
-  AVPlayer *player = [self player];
-  if (player.rate == _rate) {
-    player.rate = rate.floatValue;
-  }
-  _rate = rate.floatValue;
   resolve(nil);
 }
 
