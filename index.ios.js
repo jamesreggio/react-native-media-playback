@@ -3,6 +3,7 @@ import debounce from 'lodash.debounce';
 
 const NativePlayback = NativeModules.RNMediaPlayback;
 const NativeEvents = new NativeEventEmitter(NativePlayback);
+const nativeDebounce = 50;
 
 let nextKey = 0;
 let activeItem = null;
@@ -22,19 +23,19 @@ export class PlaybackItem {
   }
 
   addListener(callback) {
-    callback = debounce(callback, 150);
-    let lastEvent;
+    callback = debounce(callback, nativeDebounce);
+    let lastStatus;
 
     return NativeEvents.addListener('updated', payload => {
       if (activeItem !== this) {
         return;
       }
 
-      if (lastEvent !== payload.event) {
+      if (lastStatus !== payload.status) {
         callback.flush();
       }
 
-      lastEvent = payload.event;
+      lastStatus = payload.status;
       callback(payload);
     });
   }
