@@ -52,7 +52,7 @@ RCT_EXPORT_MODULE()
 
 - (dispatch_queue_t)methodQueue
 {
-  return dispatch_get_main_queue();
+  return dispatch_queue_create("com.github.jamesreggio.RNMediaPlayback", DISPATCH_QUEUE_SERIAL);
 }
 
 #pragma mark - Accessors
@@ -278,7 +278,7 @@ RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
   }
 
   [item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:AVPlayerItemContext];
-  [_player insertItem:item afterItem:nil];
+  [_player insertItem:item afterItem:_player.currentItem];
   [self setItem:item forKey:key];
 }
 
