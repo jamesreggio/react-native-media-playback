@@ -98,7 +98,7 @@ RCT_EXPORT_MODULE()
 
 - (void)removePromiseForKey:(NSNumber *)key
 {
-  // No assertion since we will attempt to remove the promise during release.
+  RCTAssert(item, @"Expected RCTPromise for key");
   [_promises removeObjectForKey:key];
 }
 
@@ -151,12 +151,16 @@ RCT_EXPORT_MODULE()
           promise.resolve(payload);
           break;
         case AVPlayerItemStatusFailed:
+          // If we fail to load during preparation, we must release all resources.
+          [_player removeItem:item];
+          [self removeItemForKey:key];
           promise.reject(@"PLAYBACK_LOAD_FAILURE", @"The item failed to load", item.error);
           break;
         case AVPlayerItemStatusUnknown:
           return;
       }
 
+      [item removeObserver:self forKeyPath:@"status"];
       [self removePromiseForKey:key];
     }
   } else {
@@ -313,7 +317,6 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
                      rejecter:(RCTPromiseRejectBlock)reject)
 {
   AVPlayerItem *item = [self itemForKey:key];
-  [item removeObserver:self forKeyPath:@"status"];
 
   if (item == _player.currentItem) {
     [self setSessionActive:NO];
@@ -325,7 +328,6 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
 
   [_player removeItem:item];
   [self removeItemForKey:key];
-  [self removePromiseForKey:key];
   resolve(nil);
 }
 

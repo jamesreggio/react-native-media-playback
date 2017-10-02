@@ -72,14 +72,15 @@ export class PlaybackItem {
   async release() {
     const {status, key} = this;
 
-    if (status !== 'RELEASED') {
-      this.status = 'RELEASED';
+    if (['PREPARED', 'ACTIVATED'].includes(status)) {
       await NativePlayback.releaseItem(key);
 
       if (activeItem === this) {
         activeItem = null;
       }
     }
+
+    this.status = 'RELEASED';
   }
 
   async play() {
