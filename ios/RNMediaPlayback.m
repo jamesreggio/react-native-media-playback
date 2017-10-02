@@ -98,7 +98,7 @@ RCT_EXPORT_MODULE()
 
 - (void)removePromiseForKey:(NSNumber *)key
 {
-  RCTAssert(item, @"Expected RCTPromise for key");
+  RCTAssert(_promises[key], @"Expected RCTPromise for key");
   [_promises removeObjectForKey:key];
 }
 
