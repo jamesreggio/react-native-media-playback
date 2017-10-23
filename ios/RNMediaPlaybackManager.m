@@ -1,28 +1,13 @@
-#import "RCTPromise.h"
 #import "RNMediaPlaybackManager.h"
+#import "RNMediaPlaybackItem.h"
+#import "RCTPromise.h"
 #import <React/RCTAssert.h>
-#import <React/RCTUtils.h>
 
 @import AVFoundation;
-
-#ifdef DEBUG
-#define PLAYBACK_DEBUG
-#endif
-
-static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 @implementation RNMediaPlaybackManager
 {
   NSMutableDictionary *_items;
-  NSMutableDictionary *_promises;
-
-  id _timeObserver;
-  AVPlayer *_player;
-  float _rate;
-
-#ifdef PLAYBACK_DEBUG
-  NSDate *_preparedAt;
-#endif
 }
 
 RCT_EXPORT_MODULE(MediaPlaybackManager)
@@ -31,20 +16,13 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
 {
   if (self = [super init]) {
     _items = [NSMutableDictionary dictionary];
-    _promises = [NSMutableDictionary dictionary];
-
-    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-    [notificationCenter addObserver:self selector:@selector(itemDidFinish:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-    [notificationCenter addObserver:self selector:@selector(itemDidFinishWithError:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
   }
   return self;
 }
 
-- (void)dealloc
+- (void)invalidate
 {
-  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
+  [_items removeAllObjects];
 }
 
 - (dispatch_queue_t)methodQueue
@@ -52,151 +30,33 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
   return dispatch_queue_create("com.github.jamesreggio.react.media", DISPATCH_QUEUE_SERIAL);
 }
 
-#pragma mark - Accessors
-
-- (NSNumber *)keyForItem:(AVPlayerItem *)item
-{
-  NSArray<NSNumber *> *keys = [_items allKeysForObject:item];
-  RCTAssert(keys.count == 1, @"Exactly one key expected for AVPlayerItem");
-  return keys.firstObject;
-}
-
-- (AVPlayerItem *)itemForKey:(NSNumber *)key
-{
-  AVPlayerItem *item = _items[key];
-  RCTAssert(item, @"Expected AVPlayerItem for key");
-  return item;
-}
-
-- (void)setItem:(AVPlayerItem *)item forKey:(NSNumber *)key
-{
-  RCTAssert(!_items[key], @"AVPlayerItem key already in use");
-  _items[key] = item;
-}
-
-- (void)removeItemForKey:(NSNumber *)key
-{
-  RCTAssert(_items[key], @"AVPlayerItem key not in use");
-  [_items removeObjectForKey:key];
-}
-
-- (RCTPromise *)promiseForKey:(NSNumber *)key
-{
-  RCTPromise *promise = _promises[key];
-  RCTAssert(promise, @"Expected RCTPromise for key");
-  return promise;
-}
-
-- (void)setPromise:(RCTPromise *)promise forKey:(NSNumber *)key
-{
-  RCTAssert(!_promises[key], @"RCTPromise key already in use");
-  _promises[key] = promise;
-}
-
-- (void)removePromiseForKey:(NSNumber *)key
-{
-  RCTAssert(_promises[key], @"Expected RCTPromise for key");
-  [_promises removeObjectForKey:key];
-}
-
-#pragma mark - Events
-
 - (NSArray<NSString *> *)supportedEvents
 {
   return @[@"updated"];
 }
 
-- (void)sendUpdate
+#pragma mark - Accessors
+
+- (RNMediaPlaybackItem *)itemForKey:(NSNumber *)key
 {
-  NSMutableDictionary *body = [NSMutableDictionary dictionary];
-  body[@"position"] = self.playerPosition;
-  body[@"status"] = self.playerStatus;
-
-#ifdef PLAYBACK_DEBUG
-  if (_preparedAt && [body[@"status"] isEqual:@"PLAYING"]) {
-    NSTimeInterval playbackTime = [[NSDate date] timeIntervalSinceDate:_preparedAt];
-    NSLog(@"[MediaPlaybackManager] time to play: %f", playbackTime);
-    _preparedAt = nil;
-  }
-#endif
-
-  [self sendEventWithName:@"updated" body:body];
+  RNMediaPlaybackItem *item = _items[key];
+  RCTAssert(item, @"Expected item for key");
+  return item;
 }
 
-- (void)observeValueForKeyPath:(NSString *)keyPath
-                      ofObject:(id)object
-                        change:(NSDictionary<NSString *,id> *)change
-                       context:(void *)context
+- (void)setItem:(RNMediaPlaybackItem *)item forKey:(NSNumber *)key
 {
-  if (context == AVPlayerItemContext) {
-    if ([keyPath isEqualToString:@"status"]) {
-      AVPlayerItem *item = (AVPlayerItem *)object;
-      NSNumber *key = [self keyForItem:item];
-      RCTPromise *promise = [self promiseForKey:key];
-
-      if (!promise) {
-        return;
-      }
-
-      NSNumber *value = change[NSKeyValueChangeNewKey];
-      AVPlayerItemStatus status = value.integerValue;
-      NSMutableDictionary *payload = [NSMutableDictionary dictionary];
-
-      switch (status) {
-        case AVPlayerItemStatusReadyToPlay:
-          payload[@"duration"] = @(CMTimeGetSeconds(item.asset.duration));
-          promise.resolve(payload);
-          break;
-        case AVPlayerItemStatusFailed:
-          // If we fail to load during preparation, we must release all resources.
-          [_player removeItem:item];
-          [self removeItemForKey:key];
-          promise.reject(@"PLAYBACK_LOAD_FAILURE", @"The item failed to load", item.error);
-          break;
-        case AVPlayerItemStatusUnknown:
-          return;
-      }
-
-      [item removeObserver:self forKeyPath:@"status"];
-      [self removePromiseForKey:key];
-    }
-  } else {
-    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
-  }
+  RCTAssert(!_items[key], @"Key already in use");
+  _items[key] = item;
 }
 
-- (void)itemDidFinish:(NSNotification*)notification {
-  dispatch_async(self.methodQueue, ^{
-    RCTAssert(
-      notification.object == self.player.currentItem,
-      @"Received notification for non-current AVPlayerItem"
-    );
-
-    NSMutableDictionary *body = [NSMutableDictionary dictionary];
-    body[@"position"] = self.playerPosition;
-    body[@"status"] = @"FINISHED";
-
-    [self sendEventWithName:@"updated" body:body];
-  });
+- (void)removeItemForKey:(NSNumber *)key
+{
+  RCTAssert(_items[key], @"Expected item for key");
+  _items[key] = nil;
 }
 
-- (void)itemDidFinishWithError:(NSNotification*)notification {
-  dispatch_async(self.methodQueue, ^{
-    RCTAssert(
-      notification.object == self.player.currentItem,
-      @"Received notification for non-current AVPlayerItem"
-    );
-
-    NSMutableDictionary *body = [NSMutableDictionary dictionary];
-    body[@"position"] = self.playerPosition;
-    body[@"status"] = @"FINISHED";
-    body[@"error"] = notification.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
-
-    [self sendEventWithName:@"updated" body:body];
-  });
-}
-
-#pragma mark - AVAudioSession
+#pragma mark - Session
 
 - (void)setSessionActive:(BOOL)active
 {
@@ -251,34 +111,24 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
   [session setCategory:category mode:mode options:0 error:nil];
 }
 
-#pragma mark - AVPlayerItem
-
-#define DEFAULT_UPDATE_INTERVAL 30000
+#pragma mark - Lifecycle
 
 RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
-                          url:(NSString *)url
                       options:(NSDictionary *)options
                      resolver:(RCTPromiseResolveBlock)resolve
                      rejecter:(RCTPromiseRejectBlock)reject)
 {
-#ifdef PLAYBACK_DEBUG
-  _preparedAt = [NSDate date];
-#endif
-
-  RCTPromise *promise = [RCTPromise promiseWithResolver:resolve rejecter:reject];
-  [self setPromise:promise forKey:key];
-
-  NSArray<NSString *> *keys = @[@"duration"];
-  AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:url]];
-  AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset automaticallyLoadedAssetKeys:keys];
-
-  NSNumber *position = options[@"position"];
-  if (position) {
-    [self seekItem:item position:position completion:nil];
-  }
-
-  [item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:AVPlayerItemContext];
+  __block RNMediaPlaybackItem *item = [[RNMediaPlaybackItem alloc] initWithKey:key manager:self];
   [self setItem:item forKey:key];
+
+  __block RCTPromise *promise = [RCTPromise promiseWithResolver:resolve rejecter:reject];
+  [item prepareWithOptions:options completion:^(NSError *error) {
+    if (error) {
+      promise.reject(@"PLAYBACK_LOAD_FAILURE", @"The item failed to load", error);
+    } else {
+      promise.resolve(@{@"duration": item.duration});
+    }
+  }];
 }
 
 RCT_EXPORT_METHOD(activateItem:(nonnull NSNumber *)key
@@ -286,74 +136,64 @@ RCT_EXPORT_METHOD(activateItem:(nonnull NSNumber *)key
                       resolver:(RCTPromiseResolveBlock)resolve
                       rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RCTAssert(!_timeObserver, @"Prior AVPlayerItem must be released before activation");
-  AVPlayerItem *item = [self itemForKey:key];
-
-  if (_player) {
-    [_player replaceCurrentItemWithPlayerItem:item];
-  } else {
-    _player = [AVPlayer playerWithPlayerItem:item];
-  }
-
-  _rate = 1.0f;
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item activateWithOptions:options];
   [self setSessionCategory:options[@"category"] mode:options[@"mode"]];
   [self setSessionActive:YES];
-
-  NSNumber *minimizeStalling = options[@"minimizeStalling"];
-  _player.automaticallyWaitsToMinimizeStalling = minimizeStalling ? minimizeStalling.boolValue : NO;
-
-  __weak typeof(self) *weakSelf = self;
-  NSNumber *updateInterval = options[@"updateInterval"] ?: @(DEFAULT_UPDATE_INTERVAL);
-  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue, NSEC_PER_MSEC);
-  _timeObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
-    [weakSelf sendUpdate];
-  }];
-
   resolve(nil);
 }
 
 RCT_EXPORT_METHOD(deactivateItem:(nonnull NSNumber *)key
+                         options:(NSDictionary *)options
                         resolver:(RCTPromiseResolveBlock)resolve
                         rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVPlayerItem *item = [self itemForKey:key];
-  RCTAssert(item == _player.currentItem, @"Expected AVPlayerItem to be active");
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item deactivateWithOptions:options];
 
-  [self setSessionActive:NO];
-  if (_timeObserver) {
-    [_player removeTimeObserver:_timeObserver];
-    _timeObserver = nil;
+  NSNumber *remainActive = options[@"remainActive"];
+  if (!remainActive || !remainActive.boolValue) {
+    [self setSessionActive:NO];
   }
-  [_player replaceCurrentItemWithPlayerItem:nil];
 
   resolve(nil);
 }
 
 RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
+                      options:(NSDictionary *)options
                      resolver:(RCTPromiseResolveBlock)resolve
                      rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVPlayerItem *item = [self itemForKey:key];
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item releaseWithOptions:options];
 
-  if (item == _player.currentItem) {
+  NSNumber *remainActive = options[@"remainActive"];
+  if (!remainActive || !remainActive.boolValue) {
     [self setSessionActive:NO];
-    if (_timeObserver) {
-      [_player removeTimeObserver:_timeObserver];
-      _timeObserver = nil;
-    }
-    [_player replaceCurrentItemWithPlayerItem:nil];
   }
 
   [self removeItemForKey:key];
   resolve(nil);
 }
 
-- (void)seekItem:(AVPlayerItem *)item
-        position:(NSNumber *)position
-      completion:(void (^)(BOOL finished))completion
+#pragma mark - Playback Controls
+
+RCT_EXPORT_METHOD(playItem:(nonnull NSNumber *)key
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
 {
-  CMTime time = CMTimeMakeWithSeconds(position.floatValue, NSEC_PER_SEC);
-  [item seekToTime:time completionHandler:completion];
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item play];
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(pauseItem:(nonnull NSNumber *)key
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item pause];
+  resolve(nil);
 }
 
 RCT_EXPORT_METHOD(seekItem:(nonnull NSNumber *)key
@@ -361,104 +201,56 @@ RCT_EXPORT_METHOD(seekItem:(nonnull NSNumber *)key
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVPlayerItem *item = [self itemForKey:key];
-  [self seekItem:item position:position completion:^(BOOL finished) {
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item seekTo:position completion:^(BOOL finished) {
     resolve(@(finished));
   }];
+}
+
+RCT_EXPORT_METHOD(setRateForItem:(nonnull NSNumber *)key
+                            rate:(nonnull NSNumber *)rate
+                        resolver:(RCTPromiseResolveBlock)resolve
+                        rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  item.rate = rate;
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(setBufferForItem:(nonnull NSNumber *)key
+                          duration:(nonnull NSNumber *)duration
+                          resolver:(RCTPromiseResolveBlock)resolve
+                          rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  item.buffer = duration;
+  resolve(nil);
+}
+
+#pragma mark - Playback Properties
+
+RCT_EXPORT_METHOD(getStatusForItem:(nonnull NSNumber *)key
+                          resolver:(RCTPromiseResolveBlock)resolve
+                          rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  resolve(item.status);
+}
+
+RCT_EXPORT_METHOD(getPositionForItem:(nonnull NSNumber *)key
+                            resolver:(RCTPromiseResolveBlock)resolve
+                            rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  resolve(item.position);
 }
 
 RCT_EXPORT_METHOD(getDurationForItem:(nonnull NSNumber *)key
                             resolver:(RCTPromiseResolveBlock)resolve
                             rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVPlayerItem *item = [self itemForKey:key];
-  NSTimeInterval duration = CMTimeGetSeconds(item.asset.duration);
-  resolve(@(duration));
-}
-
-RCT_EXPORT_METHOD(setBufferForItem:(nonnull NSNumber *)key
-                            amount:(nonnull NSNumber *)amount
-                          resolver:(RCTPromiseResolveBlock)resolve
-                          rejecter:(RCTPromiseRejectBlock)reject)
-{
-  AVPlayerItem *item = [self itemForKey:key];
-  NSTimeInterval duration = CMTimeGetSeconds(item.duration);
-  item.preferredForwardBufferDuration = duration * amount.floatValue;
-  resolve(nil);
-}
-
-#pragma mark - AVPlayer
-
-- (AVPlayer *)player
-{
-  RCTAssert(_player.currentItem, @"Expected currentItem for AVPlayer");
-  return _player;
-}
-
-- (NSNumber *)playerPosition
-{
-  return @(CMTimeGetSeconds(self.player.currentTime));
-}
-
-RCT_REMAP_METHOD(getPosition,
-                 getPositionWithResolver:(RCTPromiseResolveBlock)resolve
-                                rejecter:(RCTPromiseRejectBlock)reject)
-{
-  resolve(self.playerPosition);
-}
-
-- (NSString *)playerStatus
-{
-  AVPlayerTimeControlStatus status = self.player.timeControlStatus;
-
-  switch (status) {
-    case AVPlayerTimeControlStatusPaused:
-      return @"PAUSED";
-    case AVPlayerTimeControlStatusPlaying:
-      return @"PLAYING";
-    case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
-      return @"STALLED";
-  }
-}
-
-RCT_REMAP_METHOD(getStatus,
-                 getStatusWithResolver:(RCTPromiseResolveBlock)resolve
-                              rejecter:(RCTPromiseRejectBlock)reject)
-{
-  resolve(self.playerStatus);
-}
-
-RCT_EXPORT_METHOD(setRate:(nonnull NSNumber *)rate
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-{
-  AVPlayer *player = self.player;
-
-  // Only update the player rate directly if it's playing.
-  if (player.rate == _rate) {
-    player.rate = rate.floatValue;
-  }
-
-  _rate = rate.floatValue;
-  resolve(nil);
-}
-
-RCT_REMAP_METHOD(play,
-                 playWithResolver:(RCTPromiseResolveBlock)resolve
-                         rejecter:(RCTPromiseRejectBlock)reject)
-{
-  AVPlayer *player = self.player;
-  player.rate = _rate;
-  resolve(nil);
-}
-
-RCT_REMAP_METHOD(pause,
-                 pauseWithResolver:(RCTPromiseResolveBlock)resolve
-                          rejecter:(RCTPromiseRejectBlock)reject)
-{
-  AVPlayer *player = self.player;
-  player.rate = 0.0f;
-  resolve(nil);
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  resolve(item.duration);
 }
 
 @end

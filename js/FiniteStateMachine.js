@@ -1,8 +1,8 @@
 import invariant from './invariant';
 
 /**
- * FiniteStateMachine provides a state machine with serialized, asynchronous
- * state transitions.
+ * FiniteStateMachine provides a state machine with serialized,
+ * asynchronous state transitions.
  */
 
 export default class FiniteStateMachine {
@@ -20,7 +20,7 @@ export default class FiniteStateMachine {
    */
 
   async next(edge, ...args) {
-    this.chain = this.chain.then(() => {
+    this.chain = this.chain.then(async () => {
       const state = this.states[this.state];
       invariant(edge in state, `${edge} is not a valid edge`);
       const [nextState, value] = await state[edge].apply(this.context, args);

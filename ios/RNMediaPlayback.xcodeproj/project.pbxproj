@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		13BE3DEE1AC21097009241FE /* RNMediaPlaybackManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */; };
 		3605DDA51F4E132F0041A4CB /* RCTPromise.m in Sources */ = {isa = PBXBuildFile; fileRef = 3605DDA41F4E132F0041A4CB /* RCTPromise.m */; };
+		369DCB571F9EB39700B9A9E0 /* RNMediaPlaybackItem.m in Sources */ = {isa = PBXBuildFile; fileRef = 369DCB551F9EB39600B9A9E0 /* RNMediaPlaybackItem.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -29,6 +30,8 @@
 		13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackManager.m; sourceTree = "<group>"; };
 		3605DDA31F4E132F0041A4CB /* RCTPromise.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTPromise.h; sourceTree = "<group>"; };
 		3605DDA41F4E132F0041A4CB /* RCTPromise.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTPromise.m; sourceTree = "<group>"; };
+		369DCB551F9EB39600B9A9E0 /* RNMediaPlaybackItem.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackItem.m; sourceTree = "<group>"; };
+		369DCB561F9EB39600B9A9E0 /* RNMediaPlaybackItem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlaybackItem.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +58,8 @@
 			children = (
 				3605DDA31F4E132F0041A4CB /* RCTPromise.h */,
 				3605DDA41F4E132F0041A4CB /* RCTPromise.m */,
+				369DCB561F9EB39600B9A9E0 /* RNMediaPlaybackItem.h */,
+				369DCB551F9EB39600B9A9E0 /* RNMediaPlaybackItem.m */,
 				13BE3DEC1AC21097009241FE /* RNMediaPlaybackManager.h */,
 				13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */,
 				134814211AA4EA7D00B7C361 /* Products */,
@@ -118,6 +123,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3605DDA51F4E132F0041A4CB /* RCTPromise.m in Sources */,
+				369DCB571F9EB39700B9A9E0 /* RNMediaPlaybackItem.m in Sources */,
 				13BE3DEE1AC21097009241FE /* RNMediaPlaybackManager.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

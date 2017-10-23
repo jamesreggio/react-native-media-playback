@@ -26,17 +26,17 @@ let nextKey = 0;
 let activeItem = null;
 
 /**
- * Lifecycle states machine.
+ * Lifecycle state machine.
  */
 
 const states = {
   instantiated: {
-    async prepare(options = {}) {
+    async prepare(options) {
       await this._prepare(options);
       return ['prepared', this.prepared];
     },
 
-    async activate(options = {}) {
+    async activate(options) {
       await this._prepare(options);
       await this._activate(options);
       return ['activated', this.activated];
@@ -56,7 +56,7 @@ const states = {
       return ['prepared', this.prepared];
     },
 
-    async activate(options = {}) {
+    async activate(options) {
       await this._activate(options);
       return ['activated', ...this.activated];
     },
@@ -65,8 +65,8 @@ const states = {
       return ['prepared'];
     },
 
-    async release() {
-      await this._release();
+    async release(options) {
+      await this._release(options);
       return ['released'];
     },
   },
@@ -80,13 +80,13 @@ const states = {
       return ['activated', this.activated];
     },
 
-    async deactivate() {
-      await this._deactivate();
+    async deactivate(options) {
+      await this._deactivate(options);
       return ['prepared'];
     },
 
-    async release() {
-      await this._release();
+    async release(options) {
+      await this._release(options);
       return ['released'];
     },
   },
@@ -111,8 +111,8 @@ const states = {
 };
 
 /**
- * PlaybackItem encapsulates the lifecycle, playback controls, and events for
- * a playable media item.
+ * PlaybackItem encapsulates the lifecycle, events, playback controls,
+ * and properties for a playable media item.
  */
 
 export default class PlaybackItem {
@@ -123,7 +123,7 @@ export default class PlaybackItem {
   }
 
   /**
-   * Events subscriptions.
+   * Events.
    */
 
   addListener(callback) {
@@ -149,7 +149,7 @@ export default class PlaybackItem {
   }
 
   /**
-   * Public lifecycle transitions.
+   * Lifecycle.
    */
 
   prepare(options = {}) {
@@ -160,26 +160,26 @@ export default class PlaybackItem {
     return this.fsm.next('activate', options);
   }
 
-  deactivate() {
-    return this.fsm.next('deactivate');
+  deactivate(options = {}) {
+    return this.fsm.next('deactivate', options);
   }
 
-  release() {
-    return this.fsm.next('release');
+  release(options = {}) {
+    return this.fsm.next('release', options);
   }
 
   /**
-   * Private lifecycle transitions.
+   * Private lifecycle implementations.
    */
 
-  _prepare(options) {
+  async _prepare(options) {
     const {key, url} = this;
-    this.prepared = await NativeModule.prepareItem(key, url, options);
+    this.prepared = await NativeModule.prepareItem(key, {...options, url});
   }
 
-  _activate(options) {
+  async _activate(options) {
     while (activeItem) {
-      await activeItem.deactivate();
+      await activeItem.deactivate({remainActive: true});
     }
 
     activeItem = this;
@@ -190,14 +190,17 @@ export default class PlaybackItem {
     invariant(activeItem === this);
   }
 
-  _deactivate() {
+  async _deactivate(options) {
     invariant(activeItem === this);
     await NativeModule.deactivateItem(this.key, options);
     activeItem = null;
   }
 
-  _release() {
+  async _release(options) {
     await NativeModule.releaseItem(this.key, options);
+    if (activeItem === this) {
+      activeItem = null;
+    }
   }
 
   /**
@@ -226,8 +229,22 @@ export default class PlaybackItem {
     return await NativeModule.seekItem(this.key, position);
   }
 
+  async setRate(rate) {
+    this.requireState('prepared', 'activated');
+    await NativeModule.setRate(rate);
+  }
+
+  async setBuffer(duration) {
+    this.requireState('prepared', 'activated');
+    await NativeModule.setBufferForItem(this.key, duration);
+  }
+
+  /**
+   * Playback properties.
+   */
+
   async getPosition() {
-    this.requireState('activated');
+    this.requireState('prepared', 'activated');
     return await NativeModule.getPosition();
   }
 
@@ -237,17 +254,7 @@ export default class PlaybackItem {
   }
 
   async getStatus() {
-    this.requireState('activated');
-    return await NativeModule.getStatus();
-  }
-
-  async setBuffer(amount) {
     this.requireState('prepared', 'activated');
-    await NativeModule.setBufferForItem(this.key, amount);
-  }
-
-  async setRate(rate) {
-    this.requireState('activated');
-    await NativeModule.setRate(rate);
+    return await NativeModule.getStatus();
   }
 }
