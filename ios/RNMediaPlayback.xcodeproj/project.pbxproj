@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		13BE3DEE1AC21097009241FE /* RNMediaPlayback.m in Sources */ = {isa = PBXBuildFile; fileRef = 13BE3DED1AC21097009241FE /* RNMediaPlayback.m */; };
+		13BE3DEE1AC21097009241FE /* RNMediaPlaybackManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */; };
 		3605DDA51F4E132F0041A4CB /* RCTPromise.m in Sources */ = {isa = PBXBuildFile; fileRef = 3605DDA41F4E132F0041A4CB /* RCTPromise.m */; };
 /* End PBXBuildFile section */
 
@@ -25,8 +25,8 @@
 
 /* Begin PBXFileReference section */
 		134814201AA4EA6300B7C361 /* libRNMediaPlayback.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libRNMediaPlayback.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		13BE3DEC1AC21097009241FE /* RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlayback.h; sourceTree = "<group>"; };
-		13BE3DED1AC21097009241FE /* RNMediaPlayback.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlayback.m; sourceTree = "<group>"; };
+		13BE3DEC1AC21097009241FE /* RNMediaPlaybackManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlaybackManager.h; sourceTree = "<group>"; };
+		13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackManager.m; sourceTree = "<group>"; };
 		3605DDA31F4E132F0041A4CB /* RCTPromise.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTPromise.h; sourceTree = "<group>"; };
 		3605DDA41F4E132F0041A4CB /* RCTPromise.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTPromise.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -55,8 +55,8 @@
 			children = (
 				3605DDA31F4E132F0041A4CB /* RCTPromise.h */,
 				3605DDA41F4E132F0041A4CB /* RCTPromise.m */,
-				13BE3DEC1AC21097009241FE /* RNMediaPlayback.h */,
-				13BE3DED1AC21097009241FE /* RNMediaPlayback.m */,
+				13BE3DEC1AC21097009241FE /* RNMediaPlaybackManager.h */,
+				13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */,
 				134814211AA4EA7D00B7C361 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -118,7 +118,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3605DDA51F4E132F0041A4CB /* RCTPromise.m in Sources */,
-				13BE3DEE1AC21097009241FE /* RNMediaPlayback.m in Sources */,
+				13BE3DEE1AC21097009241FE /* RNMediaPlaybackManager.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

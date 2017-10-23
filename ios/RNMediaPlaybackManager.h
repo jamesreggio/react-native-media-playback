@@ -1,5 +1,5 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-@interface RNMediaPlayback : RCTEventEmitter <RCTBridgeModule>
+@interface RNMediaPlaybackManager : RCTEventEmitter <RCTBridgeModule>
 @end

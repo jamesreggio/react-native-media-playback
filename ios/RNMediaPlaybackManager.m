@@ -1,5 +1,5 @@
 #import "RCTPromise.h"
-#import "RNMediaPlayback.h"
+#import "RNMediaPlaybackManager.h"
 #import <React/RCTAssert.h>
 #import <React/RCTUtils.h>
 
@@ -11,13 +11,13 @@
 
 static void *AVPlayerItemContext = &AVPlayerItemContext;
 
-@implementation RNMediaPlayback
+@implementation RNMediaPlaybackManager
 {
   NSMutableDictionary *_items;
   NSMutableDictionary *_promises;
 
   id _timeObserver;
-  AVQueuePlayer *_player;
+  AVPlayer *_player;
   float _rate;
 
 #ifdef PLAYBACK_DEBUG
@@ -25,20 +25,17 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 #endif
 }
 
-RCT_EXPORT_MODULE()
+RCT_EXPORT_MODULE(MediaPlaybackManager)
 
 - (instancetype)init
 {
   if (self = [super init]) {
     _items = [NSMutableDictionary dictionary];
     _promises = [NSMutableDictionary dictionary];
-    _player = [AVQueuePlayer queuePlayerWithItems:@[]];
-    _rate = 1.0f;
 
     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
     [notificationCenter addObserver:self selector:@selector(itemDidFinish:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
     [notificationCenter addObserver:self selector:@selector(itemDidFinishWithError:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
-    _player.actionAtItemEnd = AVPlayerActionAtItemEndPause;
   }
   return self;
 }
@@ -52,7 +49,7 @@ RCT_EXPORT_MODULE()
 
 - (dispatch_queue_t)methodQueue
 {
-  return dispatch_queue_create("com.github.jamesreggio.RNMediaPlayback", DISPATCH_QUEUE_SERIAL);
+  return dispatch_queue_create("com.github.jamesreggio.react.media", DISPATCH_QUEUE_SERIAL);
 }
 
 #pragma mark - Accessors
@@ -118,7 +115,7 @@ RCT_EXPORT_MODULE()
 #ifdef PLAYBACK_DEBUG
   if (_preparedAt && [body[@"status"] isEqual:@"PLAYING"]) {
     NSTimeInterval playbackTime = [[NSDate date] timeIntervalSinceDate:_preparedAt];
-    NSLog(@"[playback.native] time to play: %f", playbackTime);
+    NSLog(@"[MediaPlaybackManager] time to play: %f", playbackTime);
     _preparedAt = nil;
   }
 #endif
@@ -169,7 +166,7 @@ RCT_EXPORT_MODULE()
 }
 
 - (void)itemDidFinish:(NSNotification*)notification {
-  dispatch_async([self methodQueue], ^{
+  dispatch_async(self.methodQueue, ^{
     RCTAssert(
       notification.object == self.player.currentItem,
       @"Received notification for non-current AVPlayerItem"
@@ -184,7 +181,7 @@ RCT_EXPORT_MODULE()
 }
 
 - (void)itemDidFinishWithError:(NSNotification*)notification {
-  dispatch_async([self methodQueue], ^{
+  dispatch_async(self.methodQueue, ^{
     RCTAssert(
       notification.object == self.player.currentItem,
       @"Received notification for non-current AVPlayerItem"
@@ -207,8 +204,7 @@ RCT_EXPORT_MODULE()
   [session setActive:active error:nil];
 }
 
-- (void)setSessionCategory:(NSString *)categoryName
-                      mode:(NSString *)modeName
+- (void)setSessionCategory:(NSString *)categoryName mode:(NSString *)modeName
 {
   AVAudioSession *session = [AVAudioSession sharedInstance];
   NSString *category = nil;
@@ -257,7 +253,7 @@ RCT_EXPORT_MODULE()
 
 #pragma mark - AVPlayerItem
 
-#define DEFAULT_UPDATE_INTERVAL 30
+#define DEFAULT_UPDATE_INTERVAL 30000
 
 RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
                           url:(NSString *)url
@@ -282,7 +278,6 @@ RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
   }
 
   [item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:AVPlayerItemContext];
-  [_player insertItem:item afterItem:_player.currentItem];
   [self setItem:item forKey:key];
 }
 
@@ -294,20 +289,42 @@ RCT_EXPORT_METHOD(activateItem:(nonnull NSNumber *)key
   RCTAssert(!_timeObserver, @"Prior AVPlayerItem must be released before activation");
   AVPlayerItem *item = [self itemForKey:key];
 
+  if (_player) {
+    [_player replaceCurrentItemWithPlayerItem:item];
+  } else {
+    _player = [AVPlayer playerWithPlayerItem:item];
+  }
+
   _rate = 1.0f;
-  [_player replaceCurrentItemWithPlayerItem:item];
   [self setSessionCategory:options[@"category"] mode:options[@"mode"]];
   [self setSessionActive:YES];
 
   NSNumber *minimizeStalling = options[@"minimizeStalling"];
   _player.automaticallyWaitsToMinimizeStalling = minimizeStalling ? minimizeStalling.boolValue : NO;
 
-  __weak RNMediaPlayback *weakSelf = self;
+  __weak typeof(self) *weakSelf = self;
   NSNumber *updateInterval = options[@"updateInterval"] ?: @(DEFAULT_UPDATE_INTERVAL);
-  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue / 1000, NSEC_PER_SEC);
+  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue, NSEC_PER_MSEC);
   _timeObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
     [weakSelf sendUpdate];
   }];
+
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(deactivateItem:(nonnull NSNumber *)key
+                        resolver:(RCTPromiseResolveBlock)resolve
+                        rejecter:(RCTPromiseRejectBlock)reject)
+{
+  AVPlayerItem *item = [self itemForKey:key];
+  RCTAssert(item == _player.currentItem, @"Expected AVPlayerItem to be active");
+
+  [self setSessionActive:NO];
+  if (_timeObserver) {
+    [_player removeTimeObserver:_timeObserver];
+    _timeObserver = nil;
+  }
+  [_player replaceCurrentItemWithPlayerItem:nil];
 
   resolve(nil);
 }
@@ -324,9 +341,9 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
       [_player removeTimeObserver:_timeObserver];
       _timeObserver = nil;
     }
+    [_player replaceCurrentItemWithPlayerItem:nil];
   }
 
-  [_player removeItem:item];
   [self removeItemForKey:key];
   resolve(nil);
 }
