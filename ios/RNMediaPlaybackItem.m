@@ -173,7 +173,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion
 {
   CMTime time = CMTimeMakeWithSeconds(position.floatValue, NSEC_PER_SEC);
-  [_item seekToTime:time completionHandler:completion];
+  [_player seekToTime:time completionHandler:completion];
 }
 
 - (void)setBuffer:(NSNumber *)amount

@@ -58,7 +58,7 @@ const states = {
 
     async activate(options) {
       await this._activate(options);
-      return ['activated', ...this.activated];
+      return ['activated', this.activated];
     },
 
     deactivate() {
@@ -216,12 +216,12 @@ export default class PlaybackItem {
 
   async play() {
     this.requireState('activated');
-    await NativeModule.play();
+    await NativeModule.playItem(this.key);
   }
 
   async pause() {
     this.requireState('activated');
-    await NativeModule.pause();
+    await NativeModule.pauseItem(this.key);
   }
 
   async seek(position) {
@@ -231,7 +231,7 @@ export default class PlaybackItem {
 
   async setRate(rate) {
     this.requireState('prepared', 'activated');
-    await NativeModule.setRate(rate);
+    await NativeModule.setRateForItem(this.key, rate);
   }
 
   async setBuffer(duration) {
@@ -245,7 +245,7 @@ export default class PlaybackItem {
 
   async getPosition() {
     this.requireState('prepared', 'activated');
-    return await NativeModule.getPosition();
+    return await NativeModule.getPositionForItem(this.key);
   }
 
   async getDuration() {
@@ -255,6 +255,6 @@ export default class PlaybackItem {
 
   async getStatus() {
     this.requireState('prepared', 'activated');
-    return await NativeModule.getStatus();
+    return await NativeModule.getStatusForItem(this.key);
   }
 }
