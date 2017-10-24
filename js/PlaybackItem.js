@@ -30,7 +30,7 @@ let activeItem = null;
  */
 
 const states = {
-  instantiated: {
+  released: {
     async prepare(options) {
       await this._prepare(options);
       return ['prepared', this.prepared];
@@ -43,7 +43,7 @@ const states = {
     },
 
     deactivate() {
-      return ['instantiated'];
+      return ['released'];
     },
 
     release() {
@@ -86,25 +86,8 @@ const states = {
     },
 
     async release(options) {
+      await this._deactivate(options);
       await this._release(options);
-      return ['released'];
-    },
-  },
-
-  released: {
-    prepare() {
-      throw Error('PlaybackItem is already released');
-    },
-
-    activate() {
-      throw Error('PlaybackItem is already released');
-    },
-
-    deactivate() {
-      throw Error('PlaybackItem is already released');
-    },
-
-    release() {
       return ['released'];
     },
   },
@@ -119,7 +102,7 @@ export default class PlaybackItem {
   constructor(url) {
     this.url = url;
     this.key = nextKey++;
-    this.fsm = new FiniteStateMachine(states, 'instantiated', this);
+    this.fsm = new FiniteStateMachine(states, 'released', this);
   }
 
   /**
@@ -198,9 +181,6 @@ export default class PlaybackItem {
 
   async _release(options) {
     await NativeModule.releaseItem(this.key, options);
-    if (activeItem === this) {
-      activeItem = null;
-    }
   }
 
   /**

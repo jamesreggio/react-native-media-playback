@@ -44,18 +44,6 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
   return item;
 }
 
-- (void)setItem:(RNMediaPlaybackItem *)item forKey:(NSNumber *)key
-{
-  RCTAssert(!_items[key], @"Key already in use");
-  _items[key] = item;
-}
-
-- (void)removeItemForKey:(NSNumber *)key
-{
-  RCTAssert(_items[key], @"Expected item for key");
-  _items[key] = nil;
-}
-
 #pragma mark - Session
 
 - (void)setSessionActive:(BOOL)active
@@ -118,8 +106,12 @@ RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
                      resolver:(RCTPromiseResolveBlock)resolve
                      rejecter:(RCTPromiseRejectBlock)reject)
 {
-  __block RNMediaPlaybackItem *item = [[RNMediaPlaybackItem alloc] initWithKey:key manager:self];
-  [self setItem:item forKey:key];
+  __block RNMediaPlaybackItem *item = _items[key];
+
+  if (!item) {
+    item = [[RNMediaPlaybackItem alloc] initWithKey:key manager:self];
+    _items[key] = item;
+  }
 
   __block RCTPromise *promise = [RCTPromise promiseWithResolver:resolve rejecter:reject];
   [item prepareWithOptions:options completion:^(NSError *error) {
@@ -172,7 +164,6 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
     [self setSessionActive:NO];
   }
 
-  [self removeItemForKey:key];
   resolve(nil);
 }
 

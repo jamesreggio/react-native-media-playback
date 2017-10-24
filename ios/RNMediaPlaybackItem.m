@@ -1,5 +1,6 @@
 #import "RNMediaPlaybackItem.h"
 #import <React/RCTAssert.h>
+#import <React/RCTConvert.h>
 
 @import AVFoundation;
 
@@ -14,7 +15,8 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   NSString *_url;
   AVPlayer *_player;
   AVPlayerItem *_item;
-  id _timeObserver;
+  id _intervalObserver; //XXX remove in dealloc
+  id _boundaryObserver;
   float _rate;
 }
 
@@ -110,6 +112,8 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 - (void)prepareWithOptions:(NSDictionary *)options completion:(void (^)(NSError *error))completion
 {
   RCTAssert(!_item, @"Item already prepared");
+  RCTAssert(!_intervalObserver, @"Item already activated");
+
   AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:options[@"url"]]];
   _item = [AVPlayerItem playerItemWithAsset:asset automaticallyLoadedAssetKeys:@[@"duration"]];
 
@@ -118,44 +122,77 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     [self seekTo:position completion:nil];
   }
 
+  NSNumber *buffer = options[@"buffer"];
+  if (buffer) {
+    [self setBuffer:buffer];
+  }
+
   _prepareCompletion = completion;
   [_item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:AVPlayerItemContext];
   _player = [AVPlayer playerWithPlayerItem:_item];
+  _player.automaticallyWaitsToMinimizeStalling = NO; //XXX make configurable?
 }
 
 - (void)activateWithOptions:(NSDictionary *)options
 {
-  RCTAssert(!_timeObserver, @"Item already activated");
+  RCTAssert(_item, @"Item not prepared");
+  RCTAssert(!_intervalObserver, @"Item already activated");
+
+  NSNumber *position = options[@"position"];
+  if (position) {
+    [self seekTo:position completion:nil];
+  }
 
   NSNumber *rate = options[@"rate"];
   _rate = rate ? rate.floatValue : 1.0f;
 
-  NSNumber *minimizeStalling = options[@"minimizeStalling"];
-  _player.automaticallyWaitsToMinimizeStalling = minimizeStalling ? minimizeStalling.boolValue : NO;
-
   __weak typeof(self) weakSelf = self;
-  NSNumber *updateInterval = options[@"updateInterval"] ?: @(DEFAULT_UPDATE_INTERVAL);
-  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue, NSEC_PER_MSEC);
-  _timeObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
+  void (^updateBlock)(void) = ^() {
     NSMutableDictionary *body = [NSMutableDictionary dictionary];
     body[@"status"] = weakSelf.status;
     [weakSelf sendUpdateWithBody:body];
+  };
+
+  NSNumber *updateInterval = options[@"updateInterval"] ?: @(DEFAULT_UPDATE_INTERVAL);
+  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue, NSEC_PER_MSEC);
+  _intervalObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
+    updateBlock();
   }];
+
+  if (options[@"updateBoundaries"]) {
+    NSArray<NSNumber *> *updateBoundaries = [RCTConvert NSNumberArray:options[@"updateBoundaries"]];
+    NSMutableArray<NSValue *> *boundaries = [NSMutableArray arrayWithCapacity:updateBoundaries.count];
+    for (NSNumber *updateBoundary in updateBoundaries) {
+      CMTime boundary = CMTimeMakeWithSeconds(updateBoundary.intValue, NSEC_PER_MSEC);
+      [boundaries addObject:[NSValue valueWithBytes:&boundary objCType:@encode(CMTime)]];
+    }
+    _boundaryObserver = [_player addBoundaryTimeObserverForTimes:boundaries queue:self.methodQueue usingBlock:updateBlock];
+  }
 }
 
 - (void)deactivateWithOptions:(NSDictionary *)options
 {
-  RCTAssert(_timeObserver, @"Item not activated");
+  RCTAssert(_item, @"Item not prepared");
+  RCTAssert(_intervalObserver, @"Item not activated");
   [self pause];
-  [_player removeTimeObserver:_timeObserver];
-  _timeObserver = nil;
+
+  [_player removeTimeObserver:_intervalObserver];
+  _intervalObserver = nil;
+
+  if (_boundaryObserver) {
+    [_player removeTimeObserver:_boundaryObserver];
+    _boundaryObserver = nil;
+  }
 }
 
 - (void)releaseWithOptions:(NSDictionary *)options
 {
-  if (_timeObserver) {
-    [self deactivateWithOptions:options];
-  }
+  RCTAssert(_item, @"Item not prepared");
+  RCTAssert(!_intervalObserver, @"Item still activated");
+
+  [_player replaceCurrentItemWithPlayerItem:nil];
+  _player = nil;
+  _item = nil;
 }
 
 #pragma mark - Playback Controls
