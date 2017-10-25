@@ -113,8 +113,8 @@ export default class PlaybackItem {
     callback = debounce(callback, nativeDebounce);
 
     let lastStatus;
-    return NativeEvents.addListener('updated', (payload) => {
-      if (activeItem !== this) {
+    return NativeEvents.addListener('updated', ({key, ...payload}) => {
+      if (this.key !== key) {
         return;
       }
 

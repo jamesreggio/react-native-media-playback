@@ -154,7 +154,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   };
 
   NSNumber *updateInterval = options[@"updateInterval"] ?: @(DEFAULT_UPDATE_INTERVAL);
-  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue, NSEC_PER_MSEC);
+  CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue / 1000, NSEC_PER_SEC);
   _intervalObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
     updateBlock();
   }];
@@ -163,7 +163,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     NSArray<NSNumber *> *updateBoundaries = [RCTConvert NSNumberArray:options[@"updateBoundaries"]];
     NSMutableArray<NSValue *> *boundaries = [NSMutableArray arrayWithCapacity:updateBoundaries.count];
     for (NSNumber *updateBoundary in updateBoundaries) {
-      CMTime boundary = CMTimeMakeWithSeconds(updateBoundary.intValue, NSEC_PER_MSEC);
+      CMTime boundary = CMTimeMakeWithSeconds(updateBoundary.intValue, NSEC_PER_SEC);
       [boundaries addObject:[NSValue valueWithBytes:&boundary objCType:@encode(CMTime)]];
     }
     _boundaryObserver = [_player addBoundaryTimeObserverForTimes:boundaries queue:self.methodQueue usingBlock:updateBlock];
