@@ -4,6 +4,8 @@
 
 @import AVFoundation;
 
+#define nilNull(value) ((value) == [NSNull null] ? nil : (value))
+
 static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 @implementation RNMediaPlaybackItem
@@ -117,12 +119,12 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:options[@"url"]]];
   _item = [AVPlayerItem playerItemWithAsset:asset automaticallyLoadedAssetKeys:@[@"duration"]];
 
-  NSNumber *position = options[@"position"];
+  NSNumber *position = nilNull(options[@"position"]);
   if (position) {
     [self seekTo:position completion:nil];
   }
 
-  NSNumber *buffer = options[@"buffer"];
+  NSNumber *buffer = nilNull(options[@"buffer"]);
   if (buffer) {
     [self setBuffer:buffer];
   }
@@ -138,12 +140,12 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   RCTAssert(_item, @"Item not prepared");
   RCTAssert(!_intervalObserver, @"Item already activated");
 
-  NSNumber *position = options[@"position"];
+  NSNumber *position = nilNull(options[@"position"]);
   if (position) {
     [self seekTo:position completion:nil];
   }
 
-  NSNumber *rate = options[@"rate"];
+  NSNumber *rate = nilNull(options[@"rate"]);
   _rate = rate ? rate.floatValue : 1.0f;
 
   __weak typeof(self) weakSelf = self;
@@ -153,13 +155,13 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     [weakSelf sendUpdateWithBody:body];
   };
 
-  NSNumber *updateInterval = options[@"updateInterval"] ?: @(DEFAULT_UPDATE_INTERVAL);
+  NSNumber *updateInterval = nilNull(options[@"updateInterval"]) ?: @(DEFAULT_UPDATE_INTERVAL);
   CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue / 1000, NSEC_PER_SEC);
   _intervalObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
     updateBlock();
   }];
 
-  if (options[@"updateBoundaries"]) {
+  if (nilNull(options[@"updateBoundaries"])) {
     NSArray<NSNumber *> *updateBoundaries = [RCTConvert NSNumberArray:options[@"updateBoundaries"]];
     NSMutableArray<NSValue *> *boundaries = [NSMutableArray arrayWithCapacity:updateBoundaries.count];
     for (NSNumber *updateBoundary in updateBoundaries) {

@@ -5,6 +5,8 @@
 
 @import AVFoundation;
 
+#define nilNull(value) ((value) == [NSNull null] ? nil : (value))
+
 @implementation RNMediaPlaybackManager
 {
   NSMutableDictionary *_items;
@@ -130,7 +132,7 @@ RCT_EXPORT_METHOD(activateItem:(nonnull NSNumber *)key
 {
   RNMediaPlaybackItem *item = [self itemForKey:key];
   [item activateWithOptions:options];
-  [self setSessionCategory:options[@"category"] mode:options[@"mode"]];
+  [self setSessionCategory:nilNull(options[@"category"]) mode:nilNull(options[@"mode"])];
   [self setSessionActive:YES];
   resolve(nil);
 }
@@ -143,7 +145,7 @@ RCT_EXPORT_METHOD(deactivateItem:(nonnull NSNumber *)key
   RNMediaPlaybackItem *item = [self itemForKey:key];
   [item deactivateWithOptions:options];
 
-  NSNumber *remainActive = options[@"remainActive"];
+  NSNumber *remainActive = nilNull(options[@"remainActive"]);
   if (!remainActive || !remainActive.boolValue) {
     [self setSessionActive:NO];
   }
@@ -159,7 +161,7 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
   RNMediaPlaybackItem *item = [self itemForKey:key];
   [item releaseWithOptions:options];
 
-  NSNumber *remainActive = options[@"remainActive"];
+  NSNumber *remainActive = nilNull(options[@"remainActive"]);
   if (!remainActive || !remainActive.boolValue) {
     [self setSessionActive:NO];
   }
