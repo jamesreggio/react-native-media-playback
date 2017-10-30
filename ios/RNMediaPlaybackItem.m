@@ -93,14 +93,18 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 }
 
 - (void)itemDidFinish:(NSNotification*)notification {
-  RCTAssert(_item == notification.object, @"Received notification for unexpected AVPlayerItem");
+  if (_item != notification.object) {
+    return;
+  }
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
   [self sendUpdateWithBody:body];
 }
 
 - (void)itemDidFinishWithError:(NSNotification*)notification {
-  RCTAssert(_item == notification.object, @"Received notification for unexpected AVPlayerItem");
+  if (_item != notification.object) {
+    return;
+  }
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
   body[@"error"] = notification.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
