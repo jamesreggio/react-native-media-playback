@@ -1,5 +1,6 @@
 #import "RNMediaPlaybackManager.h"
 #import "RNMediaPlaybackItem.h"
+#import "RNMediaPlaybackSession.h"
 #import "RCTPromise.h"
 #import <React/RCTAssert.h>
 
@@ -10,6 +11,8 @@
 @implementation RNMediaPlaybackManager
 {
   NSMutableDictionary *_items;
+  NSMutableDictionary *_sessions;
+  NSMutableOrderedSet *_activeSessions;
 }
 
 RCT_EXPORT_MODULE(MediaPlaybackManager)
@@ -18,12 +21,17 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
 {
   if (self = [super init]) {
     _items = [NSMutableDictionary dictionary];
+    _sessions = [NSMutableDictionary dictionary];
+    _activeSessions = [NSMutableOrderedSet orderedSet];
   }
   return self;
 }
 
 - (void)invalidate
 {
+  [[_activeSessions lastObject] deactivate];
+  [_activeSessions removeAllObjects];
+  [_sessions removeAllObjects];
   [_items removeAllObjects];
 }
 
@@ -46,62 +54,59 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
   return item;
 }
 
-#pragma mark - Session
-
-- (void)setSessionActive:(BOOL)active
+- (RNMediaPlaybackSession *)sessionForKey:(NSNumber *)key
 {
-  AVAudioSession *session = [AVAudioSession sharedInstance];
-  [session setActive:active error:nil];
+  RNMediaPlaybackSession *session = _sessions[key];
+  RCTAssert(session, @"Expected session for key");
+  return session;
 }
 
-- (void)setSessionCategory:(NSString *)categoryName mode:(NSString *)modeName
+#pragma mark - Session Lifecycle
+
+RCT_EXPORT_METHOD(activateSession:(nonnull NSNumber *)key
+                          options:(NSDictionary *)options
+                         resolver:(RCTPromiseResolveBlock)resolve
+                         rejecter:(RCTPromiseRejectBlock)reject)
 {
-  AVAudioSession *session = [AVAudioSession sharedInstance];
-  NSString *category = nil;
-  NSString *mode = nil;
+  RNMediaPlaybackSession *session = _sessions[key];
 
-  if ([categoryName isEqual: @"Ambient"]) {
-    category = AVAudioSessionCategoryAmbient;
-  } else if ([categoryName isEqual: @"SoloAmbient"]) {
-    category = AVAudioSessionCategorySoloAmbient;
-  } else if ([categoryName isEqual: @"Playback"]) {
-    category = AVAudioSessionCategoryPlayback;
-  } else if ([categoryName isEqual: @"Record"]) {
-    category = AVAudioSessionCategoryRecord;
-  } else if ([categoryName isEqual: @"PlayAndRecord"]) {
-    category = AVAudioSessionCategoryPlayAndRecord;
-  }
-#if TARGET_OS_IOS
-  else if ([categoryName isEqual: @"AudioProcessing"]) {
-    category = AVAudioSessionCategoryAudioProcessing;
-  }
-#endif
-  else if ([categoryName isEqual: @"MultiRoute"]) {
-    category = AVAudioSessionCategoryMultiRoute;
+  if (!session) {
+    session = [[RNMediaPlaybackSession alloc] initWithKey:key options:options];
+    _sessions[key] = session;
   }
 
-  if ([modeName isEqual: @"Default"]) {
-    mode = AVAudioSessionModeDefault;
-  } else if ([modeName isEqual: @"VoiceChat"]) {
-    mode = AVAudioSessionModeVoiceChat;
-  } else if ([modeName isEqual: @"VideoChat"]) {
-    mode = AVAudioSessionModeVideoChat;
-  } else if ([modeName isEqual: @"GameChat"]) {
-    mode = AVAudioSessionModeGameChat;
-  } else if ([modeName isEqual: @"VideoRecording"]) {
-    mode = AVAudioSessionModeVideoRecording;
-  } else if ([modeName isEqual: @"Measurement"]) {
-    mode = AVAudioSessionModeMeasurement;
-  } else if ([modeName isEqual: @"MoviePlayback"]) {
-    mode = AVAudioSessionModeMoviePlayback;
-  } else if ([modeName isEqual: @"SpokenAudio"]) {
-    mode = AVAudioSessionModeSpokenAudio;
-  }
+  RCTAssert(![_activeSessions containsObject:session], @"Session already active");
 
-  [session setCategory:category mode:mode options:0 error:nil];
+  [session activate];
+  [_activeSessions addObject:session];
+  resolve(nil);
 }
 
-#pragma mark - Lifecycle
+RCT_EXPORT_METHOD(deactivateSession:(nonnull NSNumber *)key
+                            options:(NSDictionary *)options
+                           resolver:(RCTPromiseResolveBlock)resolve
+                           rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackSession *session = [self sessionForKey:key];
+  RCTAssert([_activeSessions containsObject:session], @"Session not active");
+
+  BOOL active = [_activeSessions lastObject] == session;
+  [_activeSessions removeObject:session];
+
+  if (active) {
+    [_activeSessions removeObject:session];
+
+    if ([_activeSessions count] == 0) {
+      [session deactivate];
+    } else {
+      [[_activeSessions lastObject] activate];
+    }
+  }
+
+  resolve(nil);
+}
+
+#pragma mark - Item Lifecycle
 
 RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
                       options:(NSDictionary *)options
@@ -132,8 +137,6 @@ RCT_EXPORT_METHOD(activateItem:(nonnull NSNumber *)key
 {
   RNMediaPlaybackItem *item = [self itemForKey:key];
   [item activateWithOptions:options];
-  [self setSessionCategory:nilNull(options[@"category"]) mode:nilNull(options[@"mode"])];
-  [self setSessionActive:YES];
   resolve(nil);
 }
 
@@ -144,12 +147,6 @@ RCT_EXPORT_METHOD(deactivateItem:(nonnull NSNumber *)key
 {
   RNMediaPlaybackItem *item = [self itemForKey:key];
   [item deactivateWithOptions:options];
-
-  NSNumber *remainActive = nilNull(options[@"remainActive"]);
-  if (!remainActive || !remainActive.boolValue) {
-    [self setSessionActive:NO];
-  }
-
   resolve(nil);
 }
 
@@ -160,16 +157,10 @@ RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
 {
   RNMediaPlaybackItem *item = [self itemForKey:key];
   [item releaseWithOptions:options];
-
-  NSNumber *remainActive = nilNull(options[@"remainActive"]);
-  if (!remainActive || !remainActive.boolValue) {
-    [self setSessionActive:NO];
-  }
-
   resolve(nil);
 }
 
-#pragma mark - Playback Controls
+#pragma mark - Item Playback Controls
 
 RCT_EXPORT_METHOD(playItem:(nonnull NSNumber *)key
                   resolver:(RCTPromiseResolveBlock)resolve
@@ -220,7 +211,7 @@ RCT_EXPORT_METHOD(setBufferForItem:(nonnull NSNumber *)key
   resolve(nil);
 }
 
-#pragma mark - Playback Properties
+#pragma mark - Item Playback Properties
 
 RCT_EXPORT_METHOD(getStatusForItem:(nonnull NSNumber *)key
                           resolver:(RCTPromiseResolveBlock)resolve

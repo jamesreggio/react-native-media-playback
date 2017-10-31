@@ -12,14 +12,15 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 {
   NSNumber *_key;
   __weak RCTEventEmitter *_manager;
-  void (^_prepareCompletion)(NSError *error);
 
   NSString *_url;
   AVPlayer *_player;
   AVPlayerItem *_item;
-  id _intervalObserver; //XXX remove in dealloc
-  id _boundaryObserver;
   float _rate;
+
+  void (^_prepareCompletion)(NSError *error);
+  id _intervalObserver;
+  id _boundaryObserver;
 }
 
 - (instancetype)initWithKey:(NSNumber *)key manager:(RCTEventEmitter *)manager
@@ -40,6 +41,21 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
   [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
   [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
+
+  if (_prepareCompletion) {
+    [_item removeObserver:self forKeyPath:@"status"];
+    _prepareCompletion = nil;
+  }
+
+  if (_intervalObserver) {
+    [_player removeTimeObserver:_intervalObserver];
+    _intervalObserver = nil;
+  }
+
+  if (_boundaryObserver) {
+    [_player removeTimeObserver:_boundaryObserver];
+    _boundaryObserver = nil;
+  }
 }
 
 - (dispatch_queue_t)methodQueue
@@ -51,7 +67,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 - (void)sendUpdateWithBody:(NSMutableDictionary *)body
 {
-  dispatch_async(_manager.methodQueue, ^{
+  dispatch_async(self.methodQueue, ^{
     body[@"key"] = _key;
     body[@"position"] = self.position;
     [_manager sendEventWithName:@"updated" body:body];
@@ -96,6 +112,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   if (_item != notification.object) {
     return;
   }
+
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
   [self sendUpdateWithBody:body];
@@ -105,6 +122,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   if (_item != notification.object) {
     return;
   }
+
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
   body[@"error"] = notification.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];

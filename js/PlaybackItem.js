@@ -99,10 +99,11 @@ const states = {
  */
 
 export default class PlaybackItem {
-  constructor(url) {
-    this.url = url;
+  constructor({url}) {
+    invariant(url, 'PlaybackItem requires a URL');
     this.key = nextKey++;
     this.fsm = new FiniteStateMachine(states, 'released', this);
+    this.url = url;
   }
 
   /**
@@ -162,7 +163,7 @@ export default class PlaybackItem {
 
   async _activate(options) {
     while (activeItem) {
-      await activeItem.deactivate({remainActive: true});
+      await activeItem.deactivate();
     }
 
     activeItem = this;
