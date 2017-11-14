@@ -18,6 +18,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   AVPlayerItem *_item;
   float _rate;
 
+  BOOL _updatesEnabled;
   void (^_prepareCompletion)(NSError *error);
   id _intervalObserver;
   id _boundaryObserver;
@@ -67,6 +68,10 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 - (void)sendUpdateWithBody:(NSMutableDictionary *)body
 {
+  if (!_updatesEnabled) {
+    return;
+  }
+
   dispatch_async(self.methodQueue, ^{
     body[@"key"] = _key;
     body[@"position"] = self.position;
@@ -177,6 +182,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     [weakSelf sendUpdateWithBody:body];
   };
 
+  _updatesEnabled = YES;
   NSNumber *updateInterval = nilNull(options[@"updateInterval"]) ?: @(DEFAULT_UPDATE_INTERVAL);
   CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue / 1000, NSEC_PER_SEC);
   _intervalObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
@@ -200,6 +206,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   RCTAssert(_intervalObserver, @"Item not activated");
   [self pause];
 
+  _updatesEnabled = NO;
   [_player removeTimeObserver:_intervalObserver];
   _intervalObserver = nil;
 
@@ -233,8 +240,18 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion
 {
+  _updatesEnabled = NO;
+  __weak typeof(self) weakSelf = self;
   CMTime time = CMTimeMakeWithSeconds(position.floatValue, NSEC_PER_SEC);
-  [_player seekToTime:time completionHandler:completion];
+  [_player seekToTime:time completionHandler:^(BOOL finished) {
+    __typeof__(self) strongSelf = weakSelf;
+    if (strongSelf) {
+      strongSelf->_updatesEnabled = YES;
+    }
+    if (completion) {
+      completion(finished);
+    }
+  }];
 }
 
 - (void)setBuffer:(NSNumber *)amount
