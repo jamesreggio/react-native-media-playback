@@ -20,7 +20,7 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   private final HashMap<Integer, MediaPlaybackItem> items = new HashMap<>();
 
   /**
-   * Manager lifecycle.
+   * Constructors
    */
 
   public MediaPlaybackManager(final ReactApplicationContext context) {
@@ -42,7 +42,7 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Manager events.
+   * Events
    */
 
   private interface RCTDeviceEventEmitter extends JavaScriptModule {
@@ -60,7 +60,7 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Session lifecycle.
+   * Session lifecycle
    */
 
   @ReactMethod
@@ -82,7 +82,7 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Item lifecycle.
+   * Item lifecycle
    */
 
   @ReactMethod
@@ -160,7 +160,7 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Item playback controls.
+   * Item playback controls
    */
 
   @ReactMethod
@@ -232,7 +232,7 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Item playback properties.
+   * Item playback properties
    */
 
   @ReactMethod

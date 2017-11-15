@@ -36,7 +36,7 @@ public class MediaPlaybackItem {
   private ReadableArray updateBoundaries;
 
   /**
-   *
+   * Listener interfaces
    */
 
   public interface OnPreparedListener {
@@ -48,7 +48,7 @@ public class MediaPlaybackItem {
   }
 
   /**
-   *
+   * Constructors
    */
 
   public MediaPlaybackItem(
@@ -77,7 +77,7 @@ public class MediaPlaybackItem {
   }
 
   /**
-   *
+   * Events and timers
    */
 
   private void sendUpdate() {
@@ -163,7 +163,7 @@ public class MediaPlaybackItem {
   }
 
   /**
-   *
+   * Lifecycle
    */
 
   public void prepare(
@@ -257,6 +257,7 @@ public class MediaPlaybackItem {
 
         item.seekCompleteListener.onSeekComplete(true);
         item.seekCompleteListener = null;
+        item.sendUpdate();
       }
     });
 
@@ -267,21 +268,23 @@ public class MediaPlaybackItem {
     Assertions.assertCondition(this.player != null, "Item not prepared");
     Assertions.assertCondition(this.intervalTimer == null, "Item already activated");
 
-    if (!options.isNull("position")) {
+    if (options.hasKey("position") && !options.isNull("position")) {
       this.seekTo(options.getInt("position"), null);
     }
 
-    if (!options.isNull("rate")) {
+    if (options.hasKey("rate") && !options.isNull("rate")) {
       this.setRate(options.getDouble("rate"));
     }
 
     this.intervalTimer = new Timer();
 
-    this.updateInterval = options.isNull("updateInterval")
-      ? DEFAULT_UPDATE_INTERVAL
-      : options.getInt("updateInterval");
+    this.updateInterval = (
+      !options.hasKey("updateInterval") || options.isNull("updateInterval")
+        ? DEFAULT_UPDATE_INTERVAL
+        : options.getInt("updateInterval")
+    );
 
-    if (!options.isNull("updateBoundaries")) {
+    if (options.hasKey("updateBoundaries") && !options.isNull("updateBoundaries")) {
       this.updateBoundaries = options.getArray("updateBoundaries");
       this.boundaryTimer = new Timer();
     }
@@ -311,13 +314,12 @@ public class MediaPlaybackItem {
   }
 
   /**
-   * 
+   * Playback controls
    */
 
   public void play() {
     Assertions.assertNotNull(this.player).start();
     this.startTimers();
-    // this.sendUpdate(); //XXX?
   }
 
   public void pause() {
@@ -353,7 +355,7 @@ public class MediaPlaybackItem {
   }
 
   /**
-   *
+   * Playback properties
    */
 
   public String getStatus() {
