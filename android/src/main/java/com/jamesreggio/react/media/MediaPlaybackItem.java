@@ -340,6 +340,16 @@ public class MediaPlaybackItem {
     Assertions.assertNotNull(this.player).seekTo(position * 1000);
   }
 
+  public void skipBy(
+    final Integer interval,
+    final OnSeekCompleteListener listener
+  ) {
+    int position = this.getPosition() + interval;
+    position = Math.max(0, position);
+    position = Math.min(position, this.getDuration());
+    this.seekTo(position, listener);
+  }
+
   public void setRate(final Double rate) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       final MediaPlayer player = Assertions.assertNotNull(this.player);

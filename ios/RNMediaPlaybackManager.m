@@ -191,6 +191,17 @@ RCT_EXPORT_METHOD(seekItem:(nonnull NSNumber *)key
   }];
 }
 
+RCT_EXPORT_METHOD(skipItem:(nonnull NSNumber *)key
+                  position:(nonnull NSNumber *)interval
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlaybackItem *item = [self itemForKey:key];
+  [item skipBy:interval completion:^(BOOL finished) {
+    resolve(@(finished));
+  }];
+}
+
 RCT_EXPORT_METHOD(setRateForItem:(nonnull NSNumber *)key
                             rate:(nonnull NSNumber *)rate
                         resolver:(RCTPromiseResolveBlock)resolve

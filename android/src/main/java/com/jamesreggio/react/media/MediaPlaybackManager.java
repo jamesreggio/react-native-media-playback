@@ -210,6 +210,32 @@ public class MediaPlaybackManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
+  public void skipItem(
+    final Integer key,
+    final Integer interval,
+    final Promise promise
+  ) {
+    final MediaPlaybackItem item = this.items.get(key);
+
+    Assertions.assertNotNull(item).skipBy(
+      interval,
+      new MediaPlaybackItem.OnSeekCompleteListener() {
+        boolean promiseResolved = false;
+
+        @Override
+        public void onSeekComplete(boolean finished) {
+          if (promiseResolved) {
+            return;
+          }
+
+          promiseResolved = true;
+          promise.resolve(finished);
+        }
+      }
+    );
+  }
+
+  @ReactMethod
   public void setRateForItem(
     final Integer key,
     final Double rate,

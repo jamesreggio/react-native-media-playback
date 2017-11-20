@@ -64,6 +64,13 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 #pragma mark - Events
 
+- (void)sendUpdate
+{
+  NSMutableDictionary *body = [NSMutableDictionary dictionary];
+  body[@"status"] = self.status;
+  [self sendUpdateWithBody:body];
+}
+
 - (void)sendUpdateWithBody:(NSMutableDictionary *)body
 {
   if (!_updatesEnabled) {
@@ -169,9 +176,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
   __weak typeof(self) weakSelf = self;
   void (^updateBlock)(void) = ^() {
-    NSMutableDictionary *body = [NSMutableDictionary dictionary];
-    body[@"status"] = weakSelf.status;
-    [weakSelf sendUpdateWithBody:body];
+    [weakSelf sendUpdate];
   };
 
   _updatesEnabled = YES;
@@ -247,11 +252,20 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     __typeof__(self) strongSelf = weakSelf;
     if (strongSelf) {
       strongSelf->_updatesEnabled = YES;
+      [strongSelf sendUpdate];
     }
     if (completion) {
       completion(finished);
     }
   }];
+}
+
+- (void)skipBy:(NSNumber *)interval completion:(void (^)(BOOL finished))completion
+{
+  NSInteger position = self.position.intValue + interval.intValue;
+  position = MAX(0, position);
+  position = MIN(position, self.duration.intValue);
+  [self seekTo:@(position) completion: completion];
 }
 
 - (void)setBuffer:(NSNumber *)amount

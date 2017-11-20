@@ -210,6 +210,11 @@ export default class PlaybackItem {
     return await NativeModule.seekItem(this.key, position);
   }
 
+  async skip(interval) {
+    this.requireState('prepared', 'activated');
+    return await NativeModule.skipItem(this.key, interval);
+  }
+
   async setRate(rate) {
     this.requireState('prepared', 'activated');
     await NativeModule.setRateForItem(this.key, rate);

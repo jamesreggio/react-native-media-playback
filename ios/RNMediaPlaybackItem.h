@@ -14,6 +14,7 @@
 - (void)play;
 - (void)pause;
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion;
+- (void)skipBy:(NSNumber *)interval completion:(void (^)(BOOL finished))completion;
 - (void)setRate:(NSNumber *)rate;
 - (void)setBuffer:(NSNumber *)duration;
 
