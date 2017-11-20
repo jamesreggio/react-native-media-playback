@@ -29,23 +29,21 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   if (self = [super init]) {
     _key = key;
     _manager = manager;
-
-    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-    [notificationCenter addObserver:self selector:@selector(itemDidFinish:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-    [notificationCenter addObserver:self selector:@selector(itemDidFinishWithError:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
   }
   return self;
 }
 
 - (void)dealloc
 {
-  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:nil];
-
   if (_prepareCompletion) {
     [_item removeObserver:self forKeyPath:@"status"];
     _prepareCompletion = nil;
+  }
+
+  if (_item) {
+    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+    [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+    [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:_item];
   }
 
   if (_intervalObserver) {
@@ -114,20 +112,14 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 }
 
 - (void)itemDidFinish:(NSNotification*)notification {
-  if (_item != notification.object) {
-    return;
-  }
-
+  RCTAssert(_item == notification.object, @"Received notification for unexpected AVPlayerItem");
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
   [self sendUpdateWithBody:body];
 }
 
 - (void)itemDidFinishWithError:(NSNotification*)notification {
-  if (_item != notification.object) {
-    return;
-  }
-
+  RCTAssert(_item == notification.object, @"Received notification for unexpected AVPlayerItem");
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
   body[@"error"] = notification.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
@@ -198,6 +190,10 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     }
     _boundaryObserver = [_player addBoundaryTimeObserverForTimes:boundaries queue:self.methodQueue usingBlock:updateBlock];
   }
+
+  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+  [notificationCenter addObserver:self selector:@selector(itemDidFinish:) name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+  [notificationCenter addObserver:self selector:@selector(itemDidFinishWithError:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:_item];
 }
 
 - (void)deactivateWithOptions:(NSDictionary *)options
@@ -214,6 +210,10 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     [_player removeTimeObserver:_boundaryObserver];
     _boundaryObserver = nil;
   }
+
+  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:_item];
 }
 
 - (void)releaseWithOptions:(NSDictionary *)options
