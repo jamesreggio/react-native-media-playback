@@ -77,11 +77,9 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
     return;
   }
 
-  dispatch_async(self.methodQueue, ^{
-    body[@"key"] = _key;
-    body[@"position"] = self.position;
-    [_manager sendEventWithName:@"updated" body:body];
-  });
+  body[@"key"] = _key;
+  body[@"position"] = self.position;
+  [_manager sendEventWithName:@"updated" body:body];
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
