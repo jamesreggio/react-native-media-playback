@@ -1,4 +1,4 @@
-import {NativeModules, NativeEventEmitter} from 'react-native';
+import {NativeModules, NativeEventEmitter, Platform} from 'react-native';
 import debounce from 'lodash.debounce';
 
 import FiniteStateMachine from './FiniteStateMachine';
@@ -13,7 +13,10 @@ const NativeEvents = new NativeEventEmitter(NativeModule);
 
 // Debounce native events by this amount (in ms).
 // Events are only debounced if they have the same `status`.
-const nativeDebounce = 50;
+const nativeDebounce = Platform.select({
+  ios: 50,
+  android: 0,
+});
 
 /**
  * Global state.
@@ -111,7 +114,7 @@ export default class PlaybackItem {
    */
 
   addListener(callback) {
-    callback = debounce(callback, nativeDebounce);
+    callback = nativeDebounce ? debounce(callback, nativeDebounce) : callback;
 
     let lastStatus;
     return NativeEvents.addListener('updated', ({key, ...payload}) => {
@@ -119,7 +122,7 @@ export default class PlaybackItem {
         return;
       }
 
-      if (lastStatus !== payload.status) {
+      if (lastStatus !== payload.status && callback.flush) {
         callback.flush();
       }
 
