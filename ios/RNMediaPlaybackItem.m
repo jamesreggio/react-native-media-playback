@@ -1,8 +1,17 @@
 #import "RNMediaPlaybackItem.h"
 #import <React/RCTAssert.h>
 #import <React/RCTConvert.h>
+#import <React/RCTLog.h>
 
 @import AVFoundation;
+
+#define PLAYBACK_DEBUG 0
+
+#if PLAYBACK_DEBUG
+#define LOG(...) NSLog(@"[playback.native] " __VA_ARGS__)
+#else
+#define LOG(...)
+#endif
 
 #define nilNull(value) ((value) == [NSNull null] ? nil : (value))
 
@@ -79,6 +88,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
   body[@"key"] = _key;
   body[@"position"] = self.position;
+  LOG(@"sendUpdateWithBody");
   [_manager sendEventWithName:@"updated" body:body];
 }
 
@@ -117,6 +127,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 }
 
 - (void)itemDidFinish:(NSNotification*)notification {
+  LOG(@"itemDidFinish");
   RCTAssert(_item == notification.object, @"Received notification for unexpected AVPlayerItem");
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
@@ -124,6 +135,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 }
 
 - (void)itemDidFinishWithError:(NSNotification*)notification {
+  LOG(@"itemDidFinishWithError");
   RCTAssert(_item == notification.object, @"Received notification for unexpected AVPlayerItem");
   NSMutableDictionary *body = [NSMutableDictionary dictionary];
   body[@"status"] = @"FINISHED";
@@ -181,6 +193,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   NSNumber *updateInterval = nilNull(options[@"updateInterval"]) ?: @(DEFAULT_UPDATE_INTERVAL);
   CMTime interval = CMTimeMakeWithSeconds(updateInterval.intValue / 1000, NSEC_PER_SEC);
   _intervalObserver = [_player addPeriodicTimeObserverForInterval:interval queue:self.methodQueue usingBlock:^(CMTime time) {
+    LOG(@"intervalObserver");
     updateBlock();
   }];
 
