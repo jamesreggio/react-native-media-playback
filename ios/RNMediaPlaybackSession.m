@@ -75,7 +75,13 @@
 {
   AVAudioSession *session = [AVAudioSession sharedInstance];
   if (active) {
-    [session setCategory:_category mode:_mode options:0 error:nil];
+    // iOS 10+
+    if ([session respondsToSelector:@selector(setCategory:mode:options:error:)]) {
+      [session setCategory:_category mode:_mode options:0 error:nil];
+    } else {
+      [session setCategory:_category error:nil];
+      [session setMode:_mode error:nil];
+    }
   }
   [session setActive:active error:nil];
 }

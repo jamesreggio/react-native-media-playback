@@ -168,7 +168,11 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   _prepareCompletion = completion;
   [_item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:AVPlayerItemContext];
   _player = [AVPlayer playerWithPlayerItem:_item];
-  _player.automaticallyWaitsToMinimizeStalling = NO; //XXX make configurable?
+
+  // iOS 10+
+  if ([_player respondsToSelector:@selector(setAutomaticallyWaitsToMinimizeStalling:)]) {
+    _player.automaticallyWaitsToMinimizeStalling = NO; //XXX make configurable?
+  }
 }
 
 - (void)activateWithOptions:(NSDictionary *)options
@@ -281,7 +285,10 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 - (void)setBuffer:(NSNumber *)amount
 {
-  _item.preferredForwardBufferDuration = amount.floatValue;
+  // iOS 10+
+  if ([_item respondsToSelector:@selector(setPreferredForwardBufferDuration:)]) {
+    _item.preferredForwardBufferDuration = amount.floatValue;
+  }
 }
 
 - (void)setRate:(NSNumber *)rate
@@ -299,6 +306,10 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 {
   if (!_player) {
     return @"IDLE";
+  }
+
+  if (![_player respondsToSelector:@selector(timeControlStatus)]) {
+    return _player.rate > 0 ? @"PLAYING" : @"PAUSED";
   }
 
   AVPlayerTimeControlStatus status = _player.timeControlStatus;
