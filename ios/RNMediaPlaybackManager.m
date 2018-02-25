@@ -17,6 +17,11 @@
 
 RCT_EXPORT_MODULE(MediaPlaybackManager)
 
++ (BOOL)requiresMainQueueSetup
+{
+  return NO;
+}
+
 - (instancetype)init
 {
   if (self = [super init]) {
