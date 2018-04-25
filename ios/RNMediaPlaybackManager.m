@@ -128,7 +128,11 @@ RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
   __block RCTPromise *promise = [RCTPromise promiseWithResolver:resolve rejecter:reject];
   [item prepareWithOptions:options completion:^(NSError *error) {
     if (error) {
-      promise.reject(@"PLAYBACK_LOAD_FAILURE", @"The item failed to load", error);
+      promise.reject(
+        @"PLAYBACK_LOAD_FAILURE",
+        error.localizedDescription ?: @"The item failed to load",
+        error
+      );
     } else {
       promise.resolve(@{@"duration": item.duration});
     }
