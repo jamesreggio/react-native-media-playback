@@ -152,7 +152,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   RCTAssert(!_item, @"Item already prepared");
   RCTAssert(!_intervalObserver, @"Item already activated");
 
-  AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:options[@"url"]]];
+  AVAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL URLWithString:options[@"url"]] options:@{AVURLAssetPreferPreciseDurationAndTimingKey: @YES}];
   _item = [AVPlayerItem playerItemWithAsset:asset automaticallyLoadedAssetKeys:@[@"duration"]];
 
   NSNumber *position = nilNull(options[@"position"]);
@@ -263,7 +263,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   _updatesEnabled = NO;
   __weak typeof(self) weakSelf = self;
   CMTime time = CMTimeMakeWithSeconds(position.floatValue, NSEC_PER_SEC);
-  [_player seekToTime:time completionHandler:^(BOOL finished) {
+  [_player seekToTime:time toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
     __typeof__(self) strongSelf = weakSelf;
     if (strongSelf) {
       strongSelf->_updatesEnabled = YES;
