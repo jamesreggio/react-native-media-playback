@@ -171,7 +171,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
   // iOS 10+
   if ([_player respondsToSelector:@selector(setAutomaticallyWaitsToMinimizeStalling:)]) {
-    _player.automaticallyWaitsToMinimizeStalling = NO; //XXX make configurable?
+    _player.automaticallyWaitsToMinimizeStalling = YES; //XXX make configurable?
   }
 }
 
