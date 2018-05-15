@@ -151,12 +151,15 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 {
   RCTAssert(!_item, @"Item already prepared");
   RCTAssert(!_intervalObserver, @"Item already activated");
-
   NSURL *url = [NSURL URLWithString:options[@"url"]];
+
   // If we're streaming a non-M4A audio file, playback may never start if precise timing is requested.
-  BOOL preferPreciseTiming = url.isFileURL || [url.pathExtension isEqualToString:@"m4a"];
+  BOOL preferPreciseTiming = url.isFileURL || [url.pathExtension isEqualToString:@"m4a"]; //XXX make configurable
   AVAsset *asset = [AVURLAsset URLAssetWithURL:url options:@{AVURLAssetPreferPreciseDurationAndTimingKey: @(preferPreciseTiming)}];
   _item = [AVPlayerItem playerItemWithAsset:asset automaticallyLoadedAssetKeys:@[@"duration"]];
+
+  // This is the best pitch-scaling algorithm for voice, though it sounds a bit 'tinny' for music.
+  _item.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmTimeDomain;
 
   NSNumber *position = nilNull(options[@"position"]);
   if (position) {
@@ -174,7 +177,7 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
   // iOS 10+
   if ([_player respondsToSelector:@selector(setAutomaticallyWaitsToMinimizeStalling:)]) {
-    _player.automaticallyWaitsToMinimizeStalling = YES; //XXX make configurable?
+    _player.automaticallyWaitsToMinimizeStalling = YES; //XXX make configurable
   }
 }
 
