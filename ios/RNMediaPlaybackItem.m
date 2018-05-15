@@ -152,7 +152,10 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
   RCTAssert(!_item, @"Item already prepared");
   RCTAssert(!_intervalObserver, @"Item already activated");
 
-  AVAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL URLWithString:options[@"url"]] options:@{AVURLAssetPreferPreciseDurationAndTimingKey: @YES}];
+  NSURL *url = [NSURL URLWithString:options[@"url"]];
+  // If we're streaming a non-M4A audio file, playback may never start if precise timing is requested.
+  BOOL preferPreciseTiming = url.isFileURL || [url.pathExtension isEqualToString:@"m4a"];
+  AVAsset *asset = [AVURLAsset URLAssetWithURL:url options:@{AVURLAssetPreferPreciseDurationAndTimingKey: @(preferPreciseTiming)}];
   _item = [AVPlayerItem playerItemWithAsset:asset automaticallyLoadedAssetKeys:@[@"duration"]];
 
   NSNumber *position = nilNull(options[@"position"]);
