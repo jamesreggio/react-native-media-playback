@@ -113,6 +113,8 @@ RCT_EXPORT_METHOD(deactivateSession:(nonnull NSNumber *)key
 
 #pragma mark - Item Lifecycle
 
+#define NIL_TO_NULL(value) (value == nil ? [NSNull null] : value)
+
 RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
                       options:(NSDictionary *)options
                      resolver:(RCTPromiseResolveBlock)resolve
@@ -134,7 +136,7 @@ RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
         error
       );
     } else {
-      promise.resolve(@{@"duration": item.duration});
+      promise.resolve(@{@"duration": NIL_TO_NULL(item.duration)});
     }
   }];
 }

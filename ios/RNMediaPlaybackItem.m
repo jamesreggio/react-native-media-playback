@@ -336,7 +336,12 @@ static void *AVPlayerItemContext = &AVPlayerItemContext;
 
 - (NSNumber *)duration
 {
-  return _item ? @(CMTimeGetSeconds(_item.asset.duration)) : nil;
+  if (!_item) {
+    return nil;
+  }
+
+  double duration = CMTimeGetSeconds(_item.asset.duration);
+  return !isnan(duration) ? @(duration) : nil;
 }
 
 @end
