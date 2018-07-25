@@ -7,10 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		13BE3DEE1AC21097009241FE /* RNMediaPlaybackManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */; };
-		3605DDA51F4E132F0041A4CB /* RCTPromise.m in Sources */ = {isa = PBXBuildFile; fileRef = 3605DDA41F4E132F0041A4CB /* RCTPromise.m */; };
-		3690C41B1FA8D5F000847060 /* RNMediaPlaybackSession.m in Sources */ = {isa = PBXBuildFile; fileRef = 3690C41A1FA8D5F000847060 /* RNMediaPlaybackSession.m */; };
-		369DCB571F9EB39700B9A9E0 /* RNMediaPlaybackItem.m in Sources */ = {isa = PBXBuildFile; fileRef = 369DCB551F9EB39600B9A9E0 /* RNMediaPlaybackItem.m */; };
+		361598BD21090E1600520042 /* RNMediaPlaybackManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 361598BC21090E1600520042 /* RNMediaPlaybackManager.m */; };
+		36952E9321079D4D00E0B90F /* AVPlayerItem+RNMediaPlayback.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E8921079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.m */; };
+		36952E9521079D4D00E0B90F /* RNMediaSession.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E8E21079D4C00E0B90F /* RNMediaSession.m */; };
+		36952E9621079D4D00E0B90F /* AVAsset+RNMediaPlayback.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E9021079D4C00E0B90F /* AVAsset+RNMediaPlayback.m */; };
+		36952E9721079D4D00E0B90F /* RNMediaPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E9221079D4D00E0B90F /* RNMediaPlayer.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -27,14 +28,17 @@
 
 /* Begin PBXFileReference section */
 		134814201AA4EA6300B7C361 /* libRNMediaPlayback.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libRNMediaPlayback.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		13BE3DEC1AC21097009241FE /* RNMediaPlaybackManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlaybackManager.h; sourceTree = "<group>"; };
-		13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackManager.m; sourceTree = "<group>"; };
-		3605DDA31F4E132F0041A4CB /* RCTPromise.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTPromise.h; sourceTree = "<group>"; };
-		3605DDA41F4E132F0041A4CB /* RCTPromise.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTPromise.m; sourceTree = "<group>"; };
-		3690C4191FA8D5F000847060 /* RNMediaPlaybackSession.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlaybackSession.h; sourceTree = "<group>"; };
-		3690C41A1FA8D5F000847060 /* RNMediaPlaybackSession.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackSession.m; sourceTree = "<group>"; };
-		369DCB551F9EB39600B9A9E0 /* RNMediaPlaybackItem.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackItem.m; sourceTree = "<group>"; };
-		369DCB561F9EB39600B9A9E0 /* RNMediaPlaybackItem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlaybackItem.h; sourceTree = "<group>"; };
+		361598BB21090E1500520042 /* RNMediaPlaybackManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlaybackManager.h; sourceTree = "<group>"; };
+		361598BC21090E1600520042 /* RNMediaPlaybackManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlaybackManager.m; sourceTree = "<group>"; };
+		36952E8921079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "AVPlayerItem+RNMediaPlayback.m"; sourceTree = "<group>"; };
+		36952E8A21079D4C00E0B90F /* RNMediaPlayer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlayer.h; sourceTree = "<group>"; };
+		36952E8B21079D4C00E0B90F /* RNMediaSession.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaSession.h; sourceTree = "<group>"; };
+		36952E8D21079D4C00E0B90F /* RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlayback.h; sourceTree = "<group>"; };
+		36952E8E21079D4C00E0B90F /* RNMediaSession.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaSession.m; sourceTree = "<group>"; };
+		36952E8F21079D4C00E0B90F /* AVAsset+RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "AVAsset+RNMediaPlayback.h"; sourceTree = "<group>"; };
+		36952E9021079D4C00E0B90F /* AVAsset+RNMediaPlayback.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "AVAsset+RNMediaPlayback.m"; sourceTree = "<group>"; };
+		36952E9121079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "AVPlayerItem+RNMediaPlayback.h"; sourceTree = "<group>"; };
+		36952E9221079D4D00E0B90F /* RNMediaPlayer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlayer.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,14 +63,17 @@
 		58B511D21A9E6C8500147676 = {
 			isa = PBXGroup;
 			children = (
-				3605DDA31F4E132F0041A4CB /* RCTPromise.h */,
-				3605DDA41F4E132F0041A4CB /* RCTPromise.m */,
-				369DCB561F9EB39600B9A9E0 /* RNMediaPlaybackItem.h */,
-				369DCB551F9EB39600B9A9E0 /* RNMediaPlaybackItem.m */,
-				13BE3DEC1AC21097009241FE /* RNMediaPlaybackManager.h */,
-				13BE3DED1AC21097009241FE /* RNMediaPlaybackManager.m */,
-				3690C4191FA8D5F000847060 /* RNMediaPlaybackSession.h */,
-				3690C41A1FA8D5F000847060 /* RNMediaPlaybackSession.m */,
+				36952E8F21079D4C00E0B90F /* AVAsset+RNMediaPlayback.h */,
+				36952E9021079D4C00E0B90F /* AVAsset+RNMediaPlayback.m */,
+				36952E9121079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.h */,
+				36952E8921079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.m */,
+				36952E8D21079D4C00E0B90F /* RNMediaPlayback.h */,
+				361598BB21090E1500520042 /* RNMediaPlaybackManager.h */,
+				361598BC21090E1600520042 /* RNMediaPlaybackManager.m */,
+				36952E8A21079D4C00E0B90F /* RNMediaPlayer.h */,
+				36952E9221079D4D00E0B90F /* RNMediaPlayer.m */,
+				36952E8B21079D4C00E0B90F /* RNMediaSession.h */,
+				36952E8E21079D4C00E0B90F /* RNMediaSession.m */,
 				134814211AA4EA7D00B7C361 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -127,10 +134,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3605DDA51F4E132F0041A4CB /* RCTPromise.m in Sources */,
-				369DCB571F9EB39700B9A9E0 /* RNMediaPlaybackItem.m in Sources */,
-				3690C41B1FA8D5F000847060 /* RNMediaPlaybackSession.m in Sources */,
-				13BE3DEE1AC21097009241FE /* RNMediaPlaybackManager.m in Sources */,
+				361598BD21090E1600520042 /* RNMediaPlaybackManager.m in Sources */,
+				36952E9321079D4D00E0B90F /* AVPlayerItem+RNMediaPlayback.m in Sources */,
+				36952E9621079D4D00E0B90F /* AVAsset+RNMediaPlayback.m in Sources */,
+				36952E9721079D4D00E0B90F /* RNMediaPlayer.m in Sources */,
+				36952E9521079D4D00E0B90F /* RNMediaSession.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

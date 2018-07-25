@@ -1,2 +1,1 @@
-export {default as PlaybackItem} from './js/PlaybackItem';
-export {default as PlaybackSession} from './js/PlaybackSession';
+export Player from './js/Player';

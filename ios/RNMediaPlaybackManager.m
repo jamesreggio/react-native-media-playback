@@ -1,18 +1,11 @@
-#import "RNMediaPlaybackManager.h"
-#import "RNMediaPlaybackItem.h"
-#import "RNMediaPlaybackSession.h"
-#import "RCTPromise.h"
 #import <React/RCTAssert.h>
-
-@import AVFoundation;
-
-#define nilNull(value) ((value) == [NSNull null] ? nil : (value))
+#import "RNMediaPlaybackManager.h"
+#import "RNMediaPlayer.h"
 
 @implementation RNMediaPlaybackManager
 {
-  NSMutableDictionary *_items;
-  NSMutableDictionary *_sessions;
-  NSMutableOrderedSet *_activeSessions;
+  NSMutableDictionary<NSNumber *, RNMediaPlayer *> *_players;
+  RNMediaPlayer *_activePlayer;
 }
 
 RCT_EXPORT_MODULE(MediaPlaybackManager)
@@ -25,238 +18,206 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
 - (instancetype)init
 {
   if (self = [super init]) {
-    _items = [NSMutableDictionary dictionary];
-    _sessions = [NSMutableDictionary dictionary];
-    _activeSessions = [NSMutableOrderedSet orderedSet];
+    _players = [NSMutableDictionary dictionary];
+    _activePlayer = nil;
   }
   return self;
 }
 
 - (void)invalidate
 {
-  [[_activeSessions lastObject] deactivate];
-  [_activeSessions removeAllObjects];
-  [_sessions removeAllObjects];
-  [_items removeAllObjects];
+  [_players removeAllObjects];
+  _activePlayer = nil;
 }
 
 - (dispatch_queue_t)methodQueue
 {
-  return dispatch_queue_create("com.github.jamesreggio.react.media", DISPATCH_QUEUE_SERIAL);
+  static dispatch_queue_t queue;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    queue = dispatch_queue_create("com.github.jamesreggio.react.media", DISPATCH_QUEUE_SERIAL);
+  });
+  return queue;
 }
 
 - (NSArray<NSString *> *)supportedEvents
 {
-  return @[@"updated"];
+  return @[
+    @"playerActivated",
+    @"playerDeactivated",
+    @"trackActivated",
+    @"trackUpdated",
+    @"trackFinished",
+  ];
 }
 
-#pragma mark - Accessors
+#pragma mark - Player Management
 
-- (RNMediaPlaybackItem *)itemForKey:(NSNumber *)key
+- (void)sendEventForPlayer:(RNMediaPlayer *)player withName:(NSString *)name body:(NSDictionary *)body
 {
-  RNMediaPlaybackItem *item = _items[key];
-  RCTAssert(item, @"Expected item for key");
-  return item;
+  NSMutableDictionary *mutableBody = body ? [body mutableCopy] : [NSMutableDictionary dictionary];
+  mutableBody[@"key"] = player.key;
+  [self sendEventWithName:name body:mutableBody];
 }
 
-- (RNMediaPlaybackSession *)sessionForKey:(NSNumber *)key
+- (RNMediaPlayer *)playerForKey:(NSNumber *)key
 {
-  RNMediaPlaybackSession *session = _sessions[key];
-  RCTAssert(session, @"Expected session for key");
-  return session;
+  RNMediaPlayer *player = _players[key];
+  RCTAssert(player, @"Expected player for key");
+  return player;
 }
 
-#pragma mark - Session Lifecycle
-
-RCT_EXPORT_METHOD(activateSession:(nonnull NSNumber *)key
-                          options:(NSDictionary *)options
-                         resolver:(RCTPromiseResolveBlock)resolve
-                         rejecter:(RCTPromiseRejectBlock)reject)
-{
-  RNMediaPlaybackSession *session = _sessions[key];
-
-  if (!session) {
-    session = [[RNMediaPlaybackSession alloc] initWithKey:key options:options];
-    _sessions[key] = session;
-  }
-
-  RCTAssert(![_activeSessions containsObject:session], @"Session already active");
-
-  [session activate];
-  [_activeSessions addObject:session];
-  resolve(nil);
-}
-
-RCT_EXPORT_METHOD(deactivateSession:(nonnull NSNumber *)key
-                            options:(NSDictionary *)options
-                           resolver:(RCTPromiseResolveBlock)resolve
-                           rejecter:(RCTPromiseRejectBlock)reject)
-{
-  RNMediaPlaybackSession *session = [self sessionForKey:key];
-  RCTAssert([_activeSessions containsObject:session], @"Session not active");
-
-  BOOL active = [_activeSessions lastObject] == session;
-  [_activeSessions removeObject:session];
-
-  if (active) {
-    [_activeSessions removeObject:session];
-
-    if ([_activeSessions count] == 0) {
-      [session deactivate];
-    } else {
-      [[_activeSessions lastObject] activate];
-    }
-  }
-
-  resolve(nil);
-}
-
-#pragma mark - Item Lifecycle
-
-#define NIL_TO_NULL(value) (value == nil ? [NSNull null] : value)
-
-RCT_EXPORT_METHOD(prepareItem:(nonnull NSNumber *)key
-                      options:(NSDictionary *)options
-                     resolver:(RCTPromiseResolveBlock)resolve
-                     rejecter:(RCTPromiseRejectBlock)reject)
-{
-  __block RNMediaPlaybackItem *item = _items[key];
-
-  if (!item) {
-    item = [[RNMediaPlaybackItem alloc] initWithKey:key manager:self];
-    _items[key] = item;
-  }
-
-  __block RCTPromise *promise = [RCTPromise promiseWithResolver:resolve rejecter:reject];
-  [item prepareWithOptions:options completion:^(NSError *error) {
-    if (error) {
-      promise.reject(
-        @"PLAYBACK_LOAD_FAILURE",
-        error.localizedDescription ?: @"The item failed to load",
-        error
-      );
-    } else {
-      promise.resolve(@{@"duration": NIL_TO_NULL(item.duration)});
-    }
-  }];
-}
-
-RCT_EXPORT_METHOD(activateItem:(nonnull NSNumber *)key
+RCT_EXPORT_METHOD(createPlayer:(nonnull NSNumber *)key
                        options:(NSDictionary *)options
                       resolver:(RCTPromiseResolveBlock)resolve
                       rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item activateWithOptions:options];
+  RCTAssert(!_players[key], @"Already have player for key");
+
+  RNMediaPlayer *player = [[RNMediaPlayer alloc] initWithKey:key
+                                                 methodQueue:self.methodQueue
+                                                     options:options];
+
+  player.delegate = self;
+  _players[key] = player;
   resolve(nil);
 }
 
-RCT_EXPORT_METHOD(deactivateItem:(nonnull NSNumber *)key
-                         options:(NSDictionary *)options
-                        resolver:(RCTPromiseResolveBlock)resolve
-                        rejecter:(RCTPromiseRejectBlock)reject)
+- (void)playerWillActivate:(RNMediaPlayer *)player
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item deactivateWithOptions:options];
+  _activePlayer.active = NO;
+  _activePlayer = player;
+  _activePlayer.active = YES;
+  [self sendEventForPlayer:player withName:@"playerActivated" body:nil];
+}
+
+- (void)playerDidDeactivate:(RNMediaPlayer *)player
+{
+  RCTAssert(_activePlayer == player, @"Received deactivation for inactive RNMediaPlayer");
+
+  if (_activePlayer == player) {
+    [self sendEventForPlayer:player withName:@"playerDeactivated" body:nil];
+    _activePlayer.active = NO;
+    _activePlayer = nil;
+  }
+}
+
+- (void)playerWillActivateTrack:(RNMediaPlayer *)player withBody:(NSDictionary *)body
+{
+  [self sendEventForPlayer:player withName:@"trackActivated" body:body];
+}
+
+- (void)playerDidUpdateTrack:(RNMediaPlayer *)player withBody:(NSDictionary *)body
+{
+  [self sendEventForPlayer:player withName:@"trackUpdated" body:body];
+}
+
+- (void)playerDidFinishTrack:(RNMediaPlayer *)player withBody:(NSDictionary *)body
+{
+  [self sendEventForPlayer:player withName:@"trackFinished" body:body];
+}
+
+#pragma mark - Track Management
+
+RCT_EXPORT_METHOD(insertPlayerTracks:(nonnull NSNumber *)key
+                              tracks:(NSArray *)tracks
+                          andAdvance:(BOOL)advance
+                            resolver:(RCTPromiseResolveBlock)resolve
+                            rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player insertTracks:tracks andAdvance:advance];
   resolve(nil);
 }
 
-RCT_EXPORT_METHOD(releaseItem:(nonnull NSNumber *)key
-                      options:(NSDictionary *)options
+RCT_EXPORT_METHOD(replacePlayerTracks:(nonnull NSNumber *)key
+                               tracks:(NSArray *)tracks
+                           andAdvance:(BOOL)advance
+                             resolver:(RCTPromiseResolveBlock)resolve
+                             rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player replaceTracks:tracks andAdvance:advance];
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(nextPlayerTrack:(nonnull NSNumber *)key
+                         resolver:(RCTPromiseResolveBlock)resolve
+                         rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player nextTrack];
+  resolve(nil);
+}
+
+#pragma mark - Playback Controls
+
+RCT_EXPORT_METHOD(playPlayer:(nonnull NSNumber *)key
+                    resolver:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player play];
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(pausePlayer:(nonnull NSNumber *)key
                      resolver:(RCTPromiseResolveBlock)resolve
                      rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item releaseWithOptions:options];
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player pause];
   resolve(nil);
 }
 
-#pragma mark - Item Playback Controls
-
-RCT_EXPORT_METHOD(playItem:(nonnull NSNumber *)key
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXPORT_METHOD(togglePlayer:(nonnull NSNumber *)key
+                      resolver:(RCTPromiseResolveBlock)resolve
+                      rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item play];
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player toggle];
   resolve(nil);
 }
 
-RCT_EXPORT_METHOD(pauseItem:(nonnull NSNumber *)key
-                   resolver:(RCTPromiseResolveBlock)resolve
-                   rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXPORT_METHOD(stopPlayer:(nonnull NSNumber *)key
+                    resolver:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item pause];
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player stop];
   resolve(nil);
 }
 
-RCT_EXPORT_METHOD(seekItem:(nonnull NSNumber *)key
-                  position:(nonnull NSNumber *)position
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXPORT_METHOD(seekPlayer:(nonnull NSNumber *)key
+                    position:(nonnull NSNumber *)position
+                    resolver:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item seekTo:position completion:^(BOOL finished) {
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player seekTo:position completion:^(BOOL finished) {
     resolve(@(finished));
   }];
 }
 
-RCT_EXPORT_METHOD(skipItem:(nonnull NSNumber *)key
-                  position:(nonnull NSNumber *)interval
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXPORT_METHOD(skipPlayer:(nonnull NSNumber *)key
+                    interval:(nonnull NSNumber *)interval
+                    resolver:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  [item skipBy:interval completion:^(BOOL finished) {
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player skipBy:interval completion:^(BOOL finished) {
     resolve(@(finished));
   }];
 }
 
-RCT_EXPORT_METHOD(setRateForItem:(nonnull NSNumber *)key
-                            rate:(nonnull NSNumber *)rate
-                        resolver:(RCTPromiseResolveBlock)resolve
-                        rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXPORT_METHOD(setPlayerRate:(nonnull NSNumber *)key
+                           rate:(nonnull NSNumber *)rate
+                       resolver:(RCTPromiseResolveBlock)resolve
+                       rejecter:(RCTPromiseRejectBlock)reject)
 {
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  item.rate = rate;
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player setRate:rate];
   resolve(nil);
-}
-
-RCT_EXPORT_METHOD(setBufferForItem:(nonnull NSNumber *)key
-                          duration:(nonnull NSNumber *)duration
-                          resolver:(RCTPromiseResolveBlock)resolve
-                          rejecter:(RCTPromiseRejectBlock)reject)
-{
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  item.buffer = duration;
-  resolve(nil);
-}
-
-#pragma mark - Item Playback Properties
-
-RCT_EXPORT_METHOD(getStatusForItem:(nonnull NSNumber *)key
-                          resolver:(RCTPromiseResolveBlock)resolve
-                          rejecter:(RCTPromiseRejectBlock)reject)
-{
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  resolve(item.status);
-}
-
-RCT_EXPORT_METHOD(getPositionForItem:(nonnull NSNumber *)key
-                            resolver:(RCTPromiseResolveBlock)resolve
-                            rejecter:(RCTPromiseRejectBlock)reject)
-{
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  resolve(item.position);
-}
-
-RCT_EXPORT_METHOD(getDurationForItem:(nonnull NSNumber *)key
-                            resolver:(RCTPromiseResolveBlock)resolve
-                            rejecter:(RCTPromiseRejectBlock)reject)
-{
-  RNMediaPlaybackItem *item = [self itemForKey:key];
-  resolve(item.duration);
 }
 
 @end

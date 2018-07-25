@@ -4,6 +4,6 @@
 
 export default (condition, message) => {
   if (!condition) {
-    throw Error(message || 'Invariant failed');
+    throw Error(message);
   }
 };
