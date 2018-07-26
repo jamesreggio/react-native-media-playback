@@ -13,16 +13,6 @@
   objc_setAssociatedObject(self, @selector(RNMediaPlayback_id), id, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-- (NSArray<NSValue *> *)RNMediaPlayback_boundaries
-{
-  return objc_getAssociatedObject(self, @selector(RNMediaPlayback_boundaries));
-}
-
-- (void)setRNMediaPlayback_boundaries:(NSArray<NSValue *> *)boundaries
-{
-  objc_setAssociatedObject(self, @selector(RNMediaPlayback_boundaries), boundaries, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
 - (id)RNMediaPlayback_boundaryObserver
 {
   return objc_getAssociatedObject(self, @selector(RNMediaPlayback_boundaryObserver));
@@ -31,6 +21,17 @@
 - (void)setRNMediaPlayback_boundaryObserver:(id)boundaryObserver
 {
   objc_setAssociatedObject(self, @selector(RNMediaPlayback_boundaryObserver), boundaryObserver, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (CMTimeRange)RNMediaPlayback_range
+{
+  NSValue *value = objc_getAssociatedObject(self, @selector(RNMediaPlayback_range));
+  return value ? [value CMTimeRangeValue] : kCMTimeRangeInvalid;
+}
+
+- (void)setRNMediaPlayback_range:(CMTimeRange)range
+{
+  objc_setAssociatedObject(self, @selector(RNMediaPlayback_range), [NSValue valueWithCMTimeRange:range], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 @end

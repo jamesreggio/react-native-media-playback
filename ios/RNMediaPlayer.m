@@ -26,7 +26,6 @@ static void *AVPlayerContext = &AVPlayerContext;
   dispatch_queue_t _methodQueue;
   RNMediaSession *_session;
   AVQueuePlayer *_player;
-  void (^_updateBlock)(void);
   BOOL _preciseTiming;
 
   float _rate;
@@ -79,18 +78,6 @@ static void *AVPlayerContext = &AVPlayerContext;
     _player = [AVQueuePlayer queuePlayerWithItems:[NSArray array]];
     _active = NO;
 
-    // Prepare update blocks.
-
-    __weak typeof(self) weakSelf = self;
-
-    _updateBlock = ^() {
-      [weakSelf playerDidUpdateTrack];
-    };
-
-    void (^intervalBlock)(CMTime) = ^(__unused CMTime time) {
-      [weakSelf playerDidUpdateTrack];
-    };
-
     // Process options.
 
     _player.actionAtItemEnd = [RNMediaPlayer getEndBehavior:nilNull(options[@"endBehavior"])];
@@ -105,6 +92,11 @@ static void *AVPlayerContext = &AVPlayerContext;
     _rate = rate.floatValue;
 
     // Observe events.
+
+    __weak typeof(self) weakSelf = self;
+    void (^intervalBlock)(CMTime) = ^(__unused CMTime time) {
+      [weakSelf playerDidUpdateTrack];
+    };
 
     NSNumber *updateInterval = nilNull(options[@"updateInterval"]) ?: DEFAULT_UPDATE_INTERVAL;
     _intervalObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(updateInterval.intValue / 1000.0f, NSEC_PER_SEC)
@@ -193,11 +185,28 @@ static void *AVPlayerContext = &AVPlayerContext;
                              name:AVPlayerItemFailedToPlayToEndTimeNotification
                            object:item];
 
-  NSArray<NSValue *> *boundaries = item.RNMediaPlayback_boundaries;
-  if (boundaries) {
-    item.RNMediaPlayback_boundaryObserver = [_player addBoundaryTimeObserverForTimes:boundaries
-                                                                               queue:_methodQueue
-                                                                          usingBlock:_updateBlock];
+  CMTimeRange range = item.RNMediaPlayback_range;
+  if (!CMTIMERANGE_IS_INDEFINITE(range)) {
+    NSMutableArray<NSValue *> *boundaries = [NSMutableArray arrayWithCapacity:2];
+    if (!CMTIME_IS_POSITIVE_INFINITY(range.duration)) {
+      [boundaries addObject:[NSValue valueWithCMTime:CMTimeRangeGetEnd(range)]];
+    }
+
+    // We only attach an observer for the upper end of the range, since it should not
+    // technically be possible to rewrind past the lower end (and there's nothing we
+    // can do if it does happen).
+    if (boundaries.count) {
+      __weak typeof(self) weakSelf = self;
+      void (^boundaryBlock)(void) = ^() {
+        LOG(@"range itemDidFinish");
+        [weakSelf playerDidFinishTrackWithError:nil];
+        [weakSelf nextTrack];
+      };
+
+      item.RNMediaPlayback_boundaryObserver = [_player addBoundaryTimeObserverForTimes:boundaries
+                                                                                 queue:_methodQueue
+                                                                            usingBlock:boundaryBlock];
+    }
   }
 }
 
@@ -237,7 +246,6 @@ static void *AVPlayerContext = &AVPlayerContext;
   static NSMapTable<NSURL *, AVAsset *> *cache;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    LOG(@"Instantiating assetCache");
     cache = [NSMapTable strongToWeakObjectsMapTable];
   });
   return cache;
@@ -288,14 +296,13 @@ static void *AVPlayerContext = &AVPlayerContext;
     item.preferredForwardBufferDuration = buffer.doubleValue;
   }
 
-  if (nilNull(options[@"boundaries"])) {
-    NSArray<NSNumber *> *boundaryNumbers = [RCTConvert NSNumberArray:options[@"updateBoundaries"]];
-    NSMutableArray<NSValue *> *boundaries = [NSMutableArray arrayWithCapacity:boundaryNumbers.count];
-    for (NSNumber *boundary in boundaryNumbers) {
-      CMTime time = CMTimeMakeWithSeconds(boundary.intValue, NSEC_PER_SEC);
-      [boundaries addObject:[NSValue valueWithBytes:&time objCType:@encode(CMTime)]];
-    }
-    item.RNMediaPlayback_boundaries = boundaries;
+  if (nilNull(options[@"range"])) {
+    NSDictionary *range = [RCTConvert NSDictionary:options[@"range"]];
+    NSNumber *lower = nilNull(range[@"lower"]);
+    NSNumber *upper = nilNull(range[@"upper"]);
+    CMTime start = lower ? CMTimeMakeWithSeconds(lower.doubleValue, NSEC_PER_SEC) : kCMTimeZero;
+    CMTime duration = upper ? CMTimeSubtract(CMTimeMakeWithSeconds(upper.doubleValue, NSEC_PER_SEC), start) : kCMTimePositiveInfinity;
+    item.RNMediaPlayback_range = CMTimeRangeMake(start, duration);
   }
 
   return item;
@@ -470,16 +477,16 @@ static void *AVPlayerContext = &AVPlayerContext;
 //XXX waveforms
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion
 {
-  // AVQueuePlayer will advance two tracks if you seek beyond the duration of the current track.
-  // We subtract a small amount to prevent this from happening.
-  CMTime duration = CMTimeSubtract(_player.currentItem.duration, CMTimeMakeWithSeconds(SEEK_DURATION_ADJUSTMENT / 1000.0f, NSEC_PER_SEC));
-
-  CMTime clampedPosition = CMTimeClampToRange(
-    CMTimeMakeWithSeconds(position.doubleValue, NSEC_PER_SEC),
-    CMTimeRangeMake(kCMTimeZero, CMTIME_IS_INDEFINITE(duration) ? kCMTimePositiveInfinity : duration)
-  );
+  CMTimeRange range = _player.currentItem.RNMediaPlayback_range;
+  if (CMTIMERANGE_IS_INDEFINITE(range)) {
+    // AVQueuePlayer will advance two tracks if you seek beyond the duration of the current track.
+    // We subtract a small amount to prevent this from happening.
+    CMTime duration = CMTimeSubtract(_player.currentItem.duration, CMTimeMakeWithSeconds(SEEK_DURATION_ADJUSTMENT / 1000.0f, NSEC_PER_SEC));
+    range = CMTimeRangeMake(kCMTimeZero, CMTIME_IS_INDEFINITE(duration) ? kCMTimePositiveInfinity : duration);
+  }
 
   __weak typeof(self) weakSelf = self;
+  CMTime clampedPosition = CMTimeClampToRange(CMTimeMakeWithSeconds(position.doubleValue, NSEC_PER_SEC), range);
   [_player seekToTime:clampedPosition toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
     [weakSelf playerDidUpdateTrack];
     if (completion) {
