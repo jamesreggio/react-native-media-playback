@@ -10,6 +10,7 @@
 {
   NSString *_mode;
   NSString *_category;
+  BOOL _active;
 }
 
 #pragma mark - AVFoundation Enumerations
@@ -66,25 +67,35 @@
 
 #pragma mark - Constructors
 
++ (instancetype)sessionWithOptions:(NSDictionary *)options
+{
+  return [[RNMediaSession alloc] initWithOptions:options];
+}
+
 - (instancetype)initWithOptions:(NSDictionary *)options
 {
   if (self = [super init]) {
     _mode = [RNMediaSession getSessionMode:options[@"mode"]];
     _category = [RNMediaSession getSessionCategory:options[@"category"]];
+    _active = NO;
   }
   return self;
 }
 
-#pragma mark - Session Lifecycle
+#pragma mark - Lifecycle
 
 - (void)activate
 {
+  RCTAssert(!_active, @"RNMediaSession already active");
   [self setSessionActive:YES];
+  _active = YES;
 }
 
 - (void)deactivate
 {
+  RCTAssert(_active, @"RNMediaSession already inactive");
   [self setSessionActive:NO];
+  _active = NO;
 }
 
 - (void)setSessionActive:(BOOL)active

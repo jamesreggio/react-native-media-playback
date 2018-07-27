@@ -30,6 +30,14 @@ export default class Player {
    * Events.
    */
 
+  static addListener(type, callback) {
+    NativeEvents.addListener(type, callback);
+  }
+
+  static removeListener(subscription) {
+    NativeEvents.removeListener(subscription);
+  }
+
   addListener(type, callback) {
     return NativeEvents.addListener(type, ({key, ...payload}) => {
       if (key !== this.key) {
@@ -49,15 +57,13 @@ export default class Player {
    */
 
   insertTracks(tracks, options = {}) {
-    const {advance = false} = options;
     invariant(Array.isArray(tracks), 'Expected array of tracks');
-    return NativeModule.insertPlayerTracks(this.key, tracks, advance);
+    return NativeModule.insertPlayerTracks(this.key, tracks, options);
   }
 
   replaceTracks(tracks, options = {}) {
-    const {advance = false} = options;
     invariant(Array.isArray(tracks), 'Expected array of tracks');
-    return NativeModule.replacePlayerTracks(this.key, tracks, advance);
+    return NativeModule.replacePlayerTracks(this.key, tracks, options);
   }
 
   nextTrack() {

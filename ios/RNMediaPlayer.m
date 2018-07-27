@@ -1,11 +1,11 @@
 #import <React/RCTAssert.h>
 #import <React/RCTConvert.h>
-#import "AVAsset+RNMediaPlayback.h"
 #import "AVPlayerItem+RNMediaPlayback.h"
 #import "RNMediaPlayback.h"
-#import "RNMediaPlayer.h"
+#import "RNMediaAsset.h"
+#import "RNMediaTrack.h"
 #import "RNMediaSession.h"
-
+#import "RNMediaPlayer.h"
 @import AVFoundation;
 
 #define DEFAULT_RATE @(1.0f)
@@ -13,7 +13,6 @@
 #define DEFAULT_PRECISE_TIMING @NO
 #define DEFAULT_UPDATE_INTERVAL @(15000) // ms
 #define DEFAULT_END_BEHAVIOR AVPlayerActionAtItemEndAdvance
-#define DEFAULT_PITCH_ALGORITHM AVAudioTimePitchAlgorithmLowQualityZeroLatency
 
 #define RAPID_UPDATE_DEBOUNCE_INTERVAL 100 // ms
 #define SEEK_DURATION_ADJUSTMENT 250 // ms
@@ -22,14 +21,11 @@ static void *AVPlayerContext = &AVPlayerContext;
 
 @implementation RNMediaPlayer
 {
-  NSNumber *_key;
-  dispatch_queue_t _methodQueue;
   RNMediaSession *_session;
-  AVQueuePlayer *_player;
-  BOOL _preciseTiming;
-
-  float _rate;
   id _intervalObserver;
+  BOOL _preciseTiming;
+  BOOL _active;
+  float _rate;
 }
 
 #pragma mark - AVFoundation Enumerations
@@ -46,22 +42,6 @@ static void *AVPlayerContext = &AVPlayerContext;
   return DEFAULT_END_BEHAVIOR;
 }
 
-+ (AVAudioTimePitchAlgorithm)getPitchAlgorithm:(NSString *)name
-{
-  if ([name isEqual: @"lowQuality"]) {
-    return AVAudioTimePitchAlgorithmLowQualityZeroLatency;
-  } else if ([name isEqual: @"timeDomain"]) {
-    return AVAudioTimePitchAlgorithmTimeDomain;
-  } else if ([name isEqual: @"spectral"]) {
-    return AVAudioTimePitchAlgorithmSpectral;
-  } else if ([name isEqual: @"varispeed"]) {
-    return AVAudioTimePitchAlgorithmVarispeed;
-  }
-
-  RCTAssert(!name, @"Unknown pitch algorithm: %@", name);
-  return DEFAULT_PITCH_ALGORITHM;
-}
-
 #pragma mark - Constructors
 
 - (instancetype)initWithKey:(NSNumber *)key
@@ -74,16 +54,16 @@ static void *AVPlayerContext = &AVPlayerContext;
 
     _key = key;
     _methodQueue = methodQueue;
-    _session = [[RNMediaSession alloc] initWithOptions:options];
-    _player = [AVQueuePlayer queuePlayerWithItems:[NSArray array]];
+    _session = [RNMediaSession sessionWithOptions:options];
+    _AVPlayer = [AVQueuePlayer queuePlayerWithItems:[NSArray array]];
     _active = NO;
 
     // Process options.
 
-    _player.actionAtItemEnd = [RNMediaPlayer getEndBehavior:nilNull(options[@"endBehavior"])];
+    _AVPlayer.actionAtItemEnd = [RNMediaPlayer getEndBehavior:nilNull(options[@"endBehavior"])];
 
     NSNumber *avoidStalls = nilNull(options[@"avoidStalls"]) ?: DEFAULT_AVOID_STALLS;
-    _player.automaticallyWaitsToMinimizeStalling = avoidStalls.boolValue;
+    _AVPlayer.automaticallyWaitsToMinimizeStalling = avoidStalls.boolValue;
 
     NSNumber *preciseTiming = nilNull(options[@"preciseTiming"]) ?: DEFAULT_PRECISE_TIMING;
     _preciseTiming = preciseTiming.boolValue;
@@ -99,43 +79,40 @@ static void *AVPlayerContext = &AVPlayerContext;
     };
 
     NSNumber *updateInterval = nilNull(options[@"updateInterval"]) ?: DEFAULT_UPDATE_INTERVAL;
-    _intervalObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(updateInterval.intValue / 1000.0f, NSEC_PER_SEC)
-                                                              queue:_methodQueue
-                                                         usingBlock:intervalBlock];
+    CMTime updateIntervalTime = CMTimeMakeWithSeconds(updateInterval.intValue / 1000.0f, NSEC_PER_SEC);
+    _intervalObserver = [_AVPlayer addPeriodicTimeObserverForInterval:updateIntervalTime
+                                                                queue:_methodQueue
+                                                           usingBlock:intervalBlock];
 
-    [_player addObserver:self
-              forKeyPath:@"currentItem"
-                 options:(NSKeyValueObservingOptionNew|NSKeyValueObservingOptionOld)
-                 context:AVPlayerContext];
+    [_AVPlayer addObserver:self
+                forKeyPath:@"currentItem"
+                   options:(NSKeyValueObservingOptionNew|NSKeyValueObservingOptionOld)
+                   context:AVPlayerContext];
 
-    [_player addObserver:self
-              forKeyPath:@"timeControlStatus"
-                 options:0
-                 context:AVPlayerContext];
+    [_AVPlayer addObserver:self
+                forKeyPath:@"timeControlStatus"
+                   options:0
+                   context:AVPlayerContext];
   }
   return self;
 }
 
 - (void)dealloc
 {
-  if (_player.currentItem) {
-    [self removeObserversForItem:_player.currentItem];
-  }
-
   if (_intervalObserver) {
-    [_player removeTimeObserver:_intervalObserver];
+    [_AVPlayer removeTimeObserver:_intervalObserver];
     _intervalObserver = nil;
   }
 
   @try {
-    [_player removeObserver:self forKeyPath:@"currentItem" context:AVPlayerContext];
-    [_player removeObserver:self forKeyPath:@"timeControlStatus" context:AVPlayerContext];
+    [_AVPlayer removeObserver:self forKeyPath:@"currentItem" context:AVPlayerContext];
+    [_AVPlayer removeObserver:self forKeyPath:@"timeControlStatus" context:AVPlayerContext];
   } @catch (__unused NSException *exception) {
     // If the subscription doesn't exist, KVO will throw.
   }
 }
 
-#pragma mark - Event Observers
+#pragma mark - Events
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
                       ofObject:(id)object
@@ -143,23 +120,24 @@ static void *AVPlayerContext = &AVPlayerContext;
                        context:(void *)context
 {
   if (context == AVPlayerContext) {
-    RCTAssert(_player == object, @"Received update for unexpected AVPlayer");
+    RCTAssert(_AVPlayer == object, @"Received update for unexpected AVPlayer");
 
     if ([keyPath isEqualToString:@"currentItem"]) {
-      LOG(@"updated currentItem: %@", self.id);
-
-      AVPlayerItem *lastItem = nilNull(change[NSKeyValueChangeOldKey]);
+      AVPlayerItem *prevItem = nilNull(change[NSKeyValueChangeOldKey]);
       AVPlayerItem *nextItem = nilNull(change[NSKeyValueChangeNewKey]);
-      [self removeObserversForItem:lastItem];
-      [self addObserversForItem:nextItem];
+      RNMediaTrack *prevTrack = prevItem.RNMediaPlayback_track;
+      RNMediaTrack *nextTrack = nextItem.RNMediaPlayback_track;
+      LOG(@"[RNMediaPlayer updatedCurrentItem] %@ -> %@", prevTrack.id, nextTrack.id);
+      [prevTrack deactivate];
+      [nextTrack activate];
 
-      if (nextItem) {
-        [self playerWillActivateTrack];
+      if (nextTrack) {
+        [self playerDidActivateTrack];
       } else {
-        [self playerDidDeactivate];
+        [self playerWillDeactivate];
       }
     } else if ([keyPath isEqualToString:@"timeControlStatus"]) {
-      LOG(@"updated timeControlStatus: %@", self.id);
+      LOG(@"[RNMediaPlayer updatedTimeControlStatus]", self.track.id);
       [self playerDidUpdateTrack];
     }
   } else {
@@ -167,188 +145,57 @@ static void *AVPlayerContext = &AVPlayerContext;
   }
 }
 
-- (void)addObserversForItem:(AVPlayerItem *)item
+#pragma mark - Lifecycle
+
+- (void)activate
 {
-  if (!item) {
-    return;
-  }
-
-  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-
-  [notificationCenter addObserver:self
-                         selector:@selector(itemDidFinish:)
-                             name:AVPlayerItemDidPlayToEndTimeNotification
-                           object:item];
-
-  [notificationCenter addObserver:self
-                         selector:@selector(itemDidFinishWithError:)
-                             name:AVPlayerItemFailedToPlayToEndTimeNotification
-                           object:item];
-
-  CMTimeRange range = item.RNMediaPlayback_range;
-  if (!CMTIMERANGE_IS_INDEFINITE(range)) {
-    NSMutableArray<NSValue *> *boundaries = [NSMutableArray arrayWithCapacity:2];
-    if (!CMTIME_IS_POSITIVE_INFINITY(range.duration)) {
-      [boundaries addObject:[NSValue valueWithCMTime:CMTimeRangeGetEnd(range)]];
-    }
-
-    // We only attach an observer for the upper end of the range, since it should not
-    // technically be possible to rewrind past the lower end (and there's nothing we
-    // can do if it does happen).
-    if (boundaries.count) {
-      __weak typeof(self) weakSelf = self;
-      void (^boundaryBlock)(void) = ^() {
-        LOG(@"range itemDidFinish");
-        [weakSelf playerDidFinishTrackWithError:nil];
-        [weakSelf nextTrack];
-      };
-
-      item.RNMediaPlayback_boundaryObserver = [_player addBoundaryTimeObserverForTimes:boundaries
-                                                                                 queue:_methodQueue
-                                                                            usingBlock:boundaryBlock];
-    }
-  }
+  RCTAssert(!_active, @"RNMediaPlayer already active");
+  LOG(@"[RNMediaPlayer activate] %@", self.key);
+  [_session activate];
+  _active = YES;
 }
 
-- (void)removeObserversForItem:(AVPlayerItem *)item
+- (void)deactivate
 {
-  if (!item) {
-    return;
+  RCTAssert(_active, @"RNMediaPlayer already inactive");
+  LOG(@"[RNMediaPlayer deactivate] %@", self.key);
+  if (self.track) {
+    [self pause];
   }
-
-  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:item];
-  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:item];
-
-  id boundaryObserver = item.RNMediaPlayback_boundaryObserver;
-  if (boundaryObserver) {
-    [_player removeTimeObserver:boundaryObserver];
-    item.RNMediaPlayback_boundaryObserver = nil;
-  }
-}
-
-- (void)itemDidFinish:(NSNotification*)notification {
-  LOG(@"itemDidFinish");
-  RCTAssert(_player.currentItem == notification.object, @"Received notification for unexpected AVPlayerItem");
-  [self playerDidFinishTrackWithError:nil];
-}
-
-- (void)itemDidFinishWithError:(NSNotification*)notification {
-  LOG(@"itemDidFinishWithError");
-  RCTAssert(_player.currentItem == notification.object, @"Received notification for unexpected AVPlayerItem");
-  [self playerDidFinishTrackWithError:notification.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey]];
-}
-
-#pragma mark - AVFoundation Factories
-
-+ (NSMapTable<NSURL *, AVAsset *> *)assetCache
-{
-  static NSMapTable<NSURL *, AVAsset *> *cache;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    cache = [NSMapTable strongToWeakObjectsMapTable];
-  });
-  return cache;
-}
-
-- (AVAsset *)assetForURL:(NSURL *)url
-{
-  NSMapTable<NSURL *, AVAsset *> *cache = RNMediaPlayer.assetCache;
-  AVAsset *asset = [cache objectForKey:url];
-
-  // If we're streaming a non-M4A audio file, playback may never start if precise timing is requested.
-  BOOL preciseTiming = _preciseTiming && (url.isFileURL || [url.pathExtension isEqualToString:@"m4a"]);
-
-  if (!asset || (preciseTiming && !asset.RNMediaPlayback_preciseTiming)) {
-    LOG(@"new assetForURL: %@", url);
-    asset = [AVURLAsset URLAssetWithURL:url options:@{AVURLAssetPreferPreciseDurationAndTimingKey: @(preciseTiming)}];
-    asset.RNMediaPlayback_preciseTiming = preciseTiming;
-    [cache setObject:asset forKey:url];
-  } else {
-    LOG(@"reusing assetForURL: %@", url);
-  }
-
-  return asset;
-}
-
-- (AVPlayerItem *)itemForTrack:(NSDictionary *)options
-{
-  NSString *id = nilNull(options[@"id"]);
-  RCTAssert(id, @"Expected track ID");
-  LOG(@"itemForTrack: %@", id);
-
-  NSString *url = nilNull(options[@"url"]);
-  RCTAssert(url, @"Expected item URL");
-  AVAsset *asset = [self assetForURL:[NSURL URLWithString:url]];
-  AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
-
-  item.RNMediaPlayback_id = id;
-  item.audioTimePitchAlgorithm = [RNMediaPlayer getPitchAlgorithm:options[@"pitchAlgorithm"]];
-
-  NSNumber *position = nilNull(options[@"position"]);
-  if (position) {
-    CMTime time = CMTimeMakeWithSeconds(position.doubleValue, NSEC_PER_SEC);
-    [item seekToTime:time toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
-  }
-
-  NSNumber *buffer = nilNull(options[@"buffer"]);
-  if (buffer) {
-    item.preferredForwardBufferDuration = buffer.doubleValue;
-  }
-
-  if (nilNull(options[@"range"])) {
-    NSDictionary *range = [RCTConvert NSDictionary:options[@"range"]];
-    NSNumber *lower = nilNull(range[@"lower"]);
-    NSNumber *upper = nilNull(range[@"upper"]);
-    CMTime start = lower ? CMTimeMakeWithSeconds(lower.doubleValue, NSEC_PER_SEC) : kCMTimeZero;
-    CMTime duration = upper ? CMTimeSubtract(CMTimeMakeWithSeconds(upper.doubleValue, NSEC_PER_SEC), start) : kCMTimePositiveInfinity;
-    item.RNMediaPlayback_range = CMTimeRangeMake(start, duration);
-  }
-
-  return item;
-}
-
-#pragma mark - Player Lifecycle
-
-- (void)ensureActive
-{
-  if (!_active) {
-    [self playerWillActivate];
-  }
-}
-
-- (void)resignActive
-{
-  if (_active) {
-    [self playerDidDeactivate];
-  }
+  [_session deactivate];
+  _active = NO;
 }
 
 - (void)playerWillActivate
 {
-  [_session activate];
-  LOG(@"playerWillActivate");
+  if (_active) {
+    return;
+  }
+
+  LOG(@"[RNMediaPlayer playerWillActivate] %@", self.key);
   if ([_delegate respondsToSelector:@selector(playerWillActivate:)]) {
     [_delegate playerWillActivate:self];
   }
 }
 
-- (void)playerDidDeactivate
+- (void)playerWillDeactivate
 {
-  [_session deactivate];
-  LOG(@"playerDidDeactivate");
-  if ([_delegate respondsToSelector:@selector(playerDidDeactivate:)]) {
-    [_delegate playerDidDeactivate:self];
+  if (!_active) {
+    return;
+  }
+
+  LOG(@"[RNMediaPlayer playerWillDeactivate] %@", self.key);
+  if ([_delegate respondsToSelector:@selector(playerWillDeactivate:)]) {
+    [_delegate playerWillDeactivate:self];
   }
 }
 
-- (void)playerWillActivateTrack
+- (void)playerDidActivateTrack
 {
-  RCTAssert(_player.currentItem, @"No track to activate");
-  NSDictionary *body = @{@"id": self.id};
-  LOG(@"playerWillActivateTrack: %@", body);
-  if ([_delegate respondsToSelector:@selector(playerWillActivateTrack:withBody:)]) {
-    [_delegate playerWillActivateTrack:self withBody:body];
+  RCTAssert(self.track, @"Expected track to activate");
+  LOG(@"[RNMediaPlayer playerDidActivateTrack] %@ %@", self.key, self.track.id);
+  if ([_delegate respondsToSelector:@selector(playerDidActivateTrack:track:)]) {
+    [_delegate playerDidActivateTrack:self track:self.track];
   }
 }
 
@@ -370,98 +217,106 @@ static void *AVPlayerContext = &AVPlayerContext;
 - (void)_playerDidUpdateTrack
 {
   // We may arrive here after the player has been deactivated.
-  if (!_player.currentItem) {
+  if (!_active) {
     return;
   }
 
-  NSDictionary *body = @{
-    @"id": self.id,
-    @"status": self.status,
-    @"position": nullNil(self.position),
-    @"duration": nullNil(self.duration),
-  };
-
-  LOG(@"playerDidUpdateTrack: %@", body);
-  if ([_delegate respondsToSelector:@selector(playerDidUpdateTrack:withBody:)]) {
-    [_delegate playerDidUpdateTrack:self withBody:body];
+  RCTAssert(self.track, @"Expected track to update");
+  LOG(@"[RNMediaPlayer playerDidUpdateTrack] %@ %@", self.key, self.track.id);
+  if ([_delegate respondsToSelector:@selector(playerDidUpdateTrack:track:)]) {
+    [_delegate playerDidUpdateTrack:self track:self.track];
   }
 }
 
-- (void)playerDidFinishTrackWithError:(NSError *)error
+- (void)trackDidFinish:(RNMediaTrack *)track withError:(NSError *)error
 {
-  RCTAssert(_player.currentItem, @"No track to finish");
-
-  NSDictionary *body = @{
-    @"id": self.id,
-    @"error": nullNil(error),
-  };
-
-  LOG(@"playerDidFinishTrack: %@", body);
-  if ([_delegate respondsToSelector:@selector(playerDidFinishTrack:withBody:)]) {
-    [_delegate playerDidFinishTrack:self withBody:body];
+  RCTAssert(track == self.track, @"Received delegate callback for inactive track");
+  LOG(@"[RNMediaPlayer trackDidFinishWithError] %@ %@", self.key, track.id);
+  if ([_delegate respondsToSelector:@selector(playerDidFinishTrack:track:withError:)]) {
+    [_delegate playerDidFinishTrack:self track:track withError:error];
   }
 }
 
-#pragma mark - Track Management
+- (void)trackDidFinishRange:(RNMediaTrack *)track withError:(NSError *)error
+{
+  RCTAssert(track == self.track, @"Received delegate callback for inactive track");
+  LOG(@"[RNMediaPlayer trackDidFinishRangeWithError] %@ %@", self.key, track.id);
+  if ([_delegate respondsToSelector:@selector(playerDidFinishTrack:track:withError:)]) {
+    [_delegate playerDidFinishTrack:self track:track withError:error];
+  }
+  [self nextTrack];
+}
 
-- (void)insertTracks:(NSArray<NSDictionary *> *)tracks andAdvance:(BOOL)advance
+#pragma mark - Tracks
+
+- (void)insertTracks:(NSArray<NSDictionary *> *)tracks options:(NSDictionary *)options
 {
   AVPlayerItem *firstItem;
-  AVPlayerItem *prevItem = _player.currentItem;
-  for (NSDictionary *track in tracks) {
-    AVPlayerItem *nextItem = [self itemForTrack:track];
-    [_player insertItem:nextItem afterItem:prevItem];
+  AVPlayerItem *prevItem = _AVPlayer.currentItem;
+  for (NSDictionary *options in tracks) {
+    RNMediaAsset *asset = [RNMediaAsset assetWithPreciseTiming:_preciseTiming options:nilNull(options[@"asset"])];
+    RNMediaTrack *track = [RNMediaTrack trackWithPlayer:self asset:asset options:options];
+    track.delegate = self;
+
+    AVPlayerItem *nextItem = track.AVPlayerItem;
+    [_AVPlayer insertItem:nextItem afterItem:prevItem];
+    [track enqueued];
+
     prevItem = nextItem;
     if (!firstItem) {
       firstItem = nextItem;
     }
   }
 
-  if (advance) {
-    if (_player.currentItem != firstItem) {
-      [_player advanceToNextItem];
-      RCTAssert(_player.currentItem == firstItem, @"Expected next AVPlayerItem to be the first");
+  if ([nilNull(options[@"advance"]) boolValue]) {
+    if (_AVPlayer.currentItem != firstItem) {
+      [self nextTrack];
+      RCTAssert(_AVPlayer.currentItem == firstItem, @"Expected next AVPlayerItem to be the first");
     }
+  }
+
+  if ([nilNull(options[@"play"]) boolValue]) {
+    [self play];
   }
 }
 
-- (void)replaceTracks:(NSArray<NSDictionary *> *)tracks andAdvance:(BOOL)advance
+- (void)replaceTracks:(NSArray<NSDictionary *> *)tracks options:(NSDictionary *)options
 {
-  NSArray<AVPlayerItem *> *items = _player.items;
-  NSUInteger currentIndex = [items indexOfObject:_player.currentItem];
+  NSArray<AVPlayerItem *> *items = _AVPlayer.items;
+  NSUInteger currentIndex = [items indexOfObject:_AVPlayer.currentItem];
 
   if (currentIndex == NSNotFound) {
-    [_player removeAllItems];
+    [_AVPlayer removeAllItems];
   } else {
     for (NSUInteger index = currentIndex + 1; index < items.count; index++) {
-      [_player removeItem:items[index]];
+      [_AVPlayer removeItem:items[index]];
     }
   }
 
-  [self insertTracks:tracks andAdvance:advance];
+  [self insertTracks:tracks options:options];
 }
 
 - (void)nextTrack
 {
-  [_player advanceToNextItem];
+  [_AVPlayer advanceToNextItem];
 }
 
-#pragma mark - Playback Controls
+#pragma mark - Playback
 
 - (void)play
 {
-  [self ensureActive];
-  _player.rate = _rate;
+  [self playerWillActivate];
+  _AVPlayer.rate = _rate;
 }
 
 - (void)pause
 {
-  _player.rate = 0.0f;
+  _AVPlayer.rate = 0.0f;
 }
 
 - (void)toggle
 {
-  if (_player.rate) {
+  if (_AVPlayer.rate) {
     [self pause];
   } else {
     [self play];
@@ -470,24 +325,24 @@ static void *AVPlayerContext = &AVPlayerContext;
 
 - (void)stop
 {
-  [_player removeAllItems];
-  [self resignActive];
+  [_AVPlayer removeAllItems];
+  [self playerWillDeactivate];
 }
 
 //XXX waveforms
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion
 {
-  CMTimeRange range = _player.currentItem.RNMediaPlayback_range;
-  if (CMTIMERANGE_IS_INDEFINITE(range)) {
+  CMTimeRange range = self.track.range;
+  if (CMTIMERANGE_IS_INVALID(range)) {
     // AVQueuePlayer will advance two tracks if you seek beyond the duration of the current track.
     // We subtract a small amount to prevent this from happening.
-    CMTime duration = CMTimeSubtract(_player.currentItem.duration, CMTimeMakeWithSeconds(SEEK_DURATION_ADJUSTMENT / 1000.0f, NSEC_PER_SEC));
+    CMTime duration = CMTimeSubtract(_AVPlayer.currentItem.duration, CMTimeMakeWithSeconds(SEEK_DURATION_ADJUSTMENT / 1000.0f, NSEC_PER_SEC));
     range = CMTimeRangeMake(kCMTimeZero, CMTIME_IS_INDEFINITE(duration) ? kCMTimePositiveInfinity : duration);
   }
 
   __weak typeof(self) weakSelf = self;
   CMTime clampedPosition = CMTimeClampToRange(CMTimeMakeWithSeconds(position.doubleValue, NSEC_PER_SEC), range);
-  [_player seekToTime:clampedPosition toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
+  [_AVPlayer seekToTime:clampedPosition toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
     [weakSelf playerDidUpdateTrack];
     if (completion) {
       completion(finished);
@@ -495,36 +350,37 @@ static void *AVPlayerContext = &AVPlayerContext;
   }];
 }
 
-//XXX waveforms
+//XXX waveforms?
 - (void)skipBy:(NSNumber *)interval completion:(void (^)(BOOL finished))completion
 {
-  CMTime position = CMTimeAdd(_player.currentTime, CMTimeMakeWithSeconds(interval.doubleValue, NSEC_PER_SEC));
+  CMTime position = CMTimeAdd(_AVPlayer.currentTime, CMTimeMakeWithSeconds(interval.doubleValue, NSEC_PER_SEC));
   [self seekTo:@(CMTimeGetSeconds(position)) completion:completion];
 }
 
 - (void)setRate:(NSNumber *)rate
 {
   // Only update the player rate directly if it's playing.
-  if (_player.rate == _rate) {
-    _player.rate = rate.floatValue;
+  if (_AVPlayer.rate == _rate) {
+    _AVPlayer.rate = rate.floatValue;
   }
   _rate = rate.floatValue;
+  [self playerDidUpdateTrack];
 }
 
-#pragma mark - Playback Properties
+#pragma mark - Properties
 
-- (NSString *)id
+- (RNMediaTrack *)track
 {
-  return _player.currentItem.RNMediaPlayback_id;
+  return _AVPlayer.currentItem.RNMediaPlayback_track;
 }
 
 - (NSString *)status
 {
-  if (!_player.currentItem) {
+  if (!_AVPlayer.currentItem) {
     return @"IDLE";
   }
 
-  switch (_player.timeControlStatus) {
+  switch (_AVPlayer.timeControlStatus) {
     case AVPlayerTimeControlStatusPaused:
       return @"PAUSED";
     case AVPlayerTimeControlStatusPlaying:
@@ -534,15 +390,25 @@ static void *AVPlayerContext = &AVPlayerContext;
   }
 }
 
+- (NSNumber *)statusRate
+{
+  return @(_AVPlayer.rate);
+}
+
+- (NSNumber *)targetRate
+{
+  return @(_rate);
+}
+
 - (NSNumber *)position
 {
-  CMTime position = _player.currentTime;
+  CMTime position = _AVPlayer.currentTime;
   return CMTIME_IS_INDEFINITE(position) ? nil : @(CMTimeGetSeconds(position));
 }
 
 - (NSNumber *)duration
 {
-  CMTime duration = _player.currentItem.duration;
+  CMTime duration = _AVPlayer.currentItem.duration;
   return CMTIME_IS_INDEFINITE(duration) ? nil : @(CMTimeGetSeconds(duration));
 }
 
