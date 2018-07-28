@@ -11,7 +11,6 @@
 		36159902210A1D1F00520042 /* RNMediaControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 36159901210A1D1F00520042 /* RNMediaControls.m */; };
 		36952E9321079D4D00E0B90F /* AVPlayerItem+RNMediaPlayback.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E8921079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.m */; };
 		36952E9521079D4D00E0B90F /* RNMediaSession.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E8E21079D4C00E0B90F /* RNMediaSession.m */; };
-		36952E9621079D4D00E0B90F /* AVAsset+RNMediaPlayback.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E9021079D4C00E0B90F /* AVAsset+RNMediaPlayback.m */; };
 		36952E9721079D4D00E0B90F /* RNMediaPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = 36952E9221079D4D00E0B90F /* RNMediaPlayer.m */; };
 		36E0C318210BC8A1009FCF74 /* RNMediaAsset.m in Sources */ = {isa = PBXBuildFile; fileRef = 36E0C317210BC8A1009FCF74 /* RNMediaAsset.m */; };
 		36E0C31B210BF456009FCF74 /* RNMediaTrack.m in Sources */ = {isa = PBXBuildFile; fileRef = 36E0C319210BF456009FCF74 /* RNMediaTrack.m */; };
@@ -40,8 +39,6 @@
 		36952E8B21079D4C00E0B90F /* RNMediaSession.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaSession.h; sourceTree = "<group>"; };
 		36952E8D21079D4C00E0B90F /* RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaPlayback.h; sourceTree = "<group>"; };
 		36952E8E21079D4C00E0B90F /* RNMediaSession.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaSession.m; sourceTree = "<group>"; };
-		36952E8F21079D4C00E0B90F /* AVAsset+RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "AVAsset+RNMediaPlayback.h"; sourceTree = "<group>"; };
-		36952E9021079D4C00E0B90F /* AVAsset+RNMediaPlayback.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "AVAsset+RNMediaPlayback.m"; sourceTree = "<group>"; };
 		36952E9121079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "AVPlayerItem+RNMediaPlayback.h"; sourceTree = "<group>"; };
 		36952E9221079D4D00E0B90F /* RNMediaPlayer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNMediaPlayer.m; sourceTree = "<group>"; };
 		36E0C316210BC8A1009FCF74 /* RNMediaAsset.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNMediaAsset.h; sourceTree = "<group>"; };
@@ -72,8 +69,6 @@
 		58B511D21A9E6C8500147676 = {
 			isa = PBXGroup;
 			children = (
-				36952E8F21079D4C00E0B90F /* AVAsset+RNMediaPlayback.h */,
-				36952E9021079D4C00E0B90F /* AVAsset+RNMediaPlayback.m */,
 				36952E9121079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.h */,
 				36952E8921079D4C00E0B90F /* AVPlayerItem+RNMediaPlayback.m */,
 				36E0C316210BC8A1009FCF74 /* RNMediaAsset.h */,
@@ -151,7 +146,6 @@
 			files = (
 				361598BD21090E1600520042 /* RNMediaPlaybackManager.m in Sources */,
 				36952E9321079D4D00E0B90F /* AVPlayerItem+RNMediaPlayback.m in Sources */,
-				36952E9621079D4D00E0B90F /* AVAsset+RNMediaPlayback.m in Sources */,
 				36E0C318210BC8A1009FCF74 /* RNMediaAsset.m in Sources */,
 				36159902210A1D1F00520042 /* RNMediaControls.m in Sources */,
 				36952E9721079D4D00E0B90F /* RNMediaPlayer.m in Sources */,
