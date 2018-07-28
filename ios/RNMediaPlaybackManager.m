@@ -136,6 +136,7 @@ RCT_EXPORT_METHOD(createPlayer:(nonnull NSNumber *)key
   [self sendEventForPlayer:player withName:@"trackFinished" body:@{
     @"id": track.id,
     @"error": nullNil(error),
+    @"position": nullNil(track.position),
   }];
 }
 
