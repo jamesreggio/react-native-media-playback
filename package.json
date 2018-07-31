@@ -1,6 +1,6 @@
 {
 	"name": "react-native-media-playback",
-	"version": "0.7.4",
+	"version": "0.7.5",
 	"peerDependencies": {
 		"react-native": ">=0.40.0"
 	}
