@@ -1,3 +1,5 @@
+//XXX add sound on skip
+
 #import <React/RCTAssert.h>
 #import <React/RCTConvert.h>
 #import "RNMediaPlayback.h"

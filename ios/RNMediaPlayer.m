@@ -14,7 +14,7 @@
 #define DEFAULT_UPDATE_INTERVAL @(15000) // ms
 #define DEFAULT_END_BEHAVIOR AVPlayerActionAtItemEndAdvance
 
-#define SKIP_INTERVAL_WINDOW_RATIO (2 / 3)
+#define SKIP_INTERVAL_WINDOW_RATIO (2.0f / 3.0f)
 #define RAPID_UPDATE_DEBOUNCE_INTERVAL 100 // ms
 #define SEEK_DURATION_ADJUSTMENT 250 // ms
 
@@ -329,7 +329,7 @@ static void *AVPlayerContext = &AVPlayerContext;
 - (void)stop
 {
   [_AVPlayer removeAllItems];
-  // Deactivation is handled by the [AVPlayer currentItem] KVO logic.
+  [self playerWillDeactivate];
 }
 
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion

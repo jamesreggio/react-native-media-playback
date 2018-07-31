@@ -34,7 +34,7 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
 {
   [RNMediaControls sharedInstance].delegate = nil;
   [_players removeAllObjects];
-  _activePlayer = nil;
+  [_activePlayer deactivate];
   _wasPlaying = nil;
 }
 
