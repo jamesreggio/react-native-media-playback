@@ -23,6 +23,7 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
   AVPlayerItem *_strongAVPlayerItem;
 
   __weak RNMediaPlayer *_player;
+  RNMediaAsset *_asset;
   id _boundaryObserver;
   BOOL _active;
 }
@@ -69,6 +70,7 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
 
     _id = id;
     _player = player;
+    _asset = asset;
     _AVPlayerItem = _strongAVPlayerItem = [AVPlayerItem playerItemWithAsset:asset.AVAsset];
     _AVPlayerItem.RNMediaPlayback_track = self;
     _active = NO;
@@ -229,6 +231,13 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
 {
   CMTime duration = self.AVPlayerItem.duration;
   return CMTIME_IS_INDEFINITE(duration) ? nil : @(CMTimeGetSeconds(duration));
+}
+
+#pragma mark - Waveforms
+
+- (CMTime)seekPositionForTarget:(CMTime)target window:(CMTime)window
+{
+  return [_asset seekPositionForTarget:target window:window];
 }
 
 @end

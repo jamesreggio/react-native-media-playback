@@ -53,6 +53,14 @@ export default class Player {
   }
 
   /**
+   * Asset management.
+   */
+
+  static setAssetWaveform(id, waveform) {
+    return NativeModule.setAssetWaveform(id, waveform);
+  }
+
+  /**
    * Track management.
    */
 

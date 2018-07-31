@@ -14,6 +14,7 @@
 #define DEFAULT_UPDATE_INTERVAL @(15000) // ms
 #define DEFAULT_END_BEHAVIOR AVPlayerActionAtItemEndAdvance
 
+#define SKIP_INTERVAL_WINDOW_RATIO (2 / 3)
 #define RAPID_UPDATE_DEBOUNCE_INTERVAL 100 // ms
 #define SEEK_DURATION_ADJUSTMENT 250 // ms
 
@@ -99,6 +100,8 @@ static void *AVPlayerContext = &AVPlayerContext;
 
 - (void)dealloc
 {
+  [self stop];
+
   if (_intervalObserver) {
     [_AVPlayer removeTimeObserver:_intervalObserver];
     _intervalObserver = nil;
@@ -133,11 +136,11 @@ static void *AVPlayerContext = &AVPlayerContext;
 
       if (nextTrack) {
         [self playerDidActivateTrack];
-      } else {
+      } else if (prevTrack) {
         [self playerWillDeactivate];
       }
     } else if ([keyPath isEqualToString:@"timeControlStatus"]) {
-      LOG(@"[RNMediaPlayer updatedTimeControlStatus]", self.track.id);
+      LOG(@"[RNMediaPlayer updatedTimeControlStatus] %@", self.track.id);
       [self playerDidUpdateTrack];
     }
   } else {
@@ -326,10 +329,9 @@ static void *AVPlayerContext = &AVPlayerContext;
 - (void)stop
 {
   [_AVPlayer removeAllItems];
-  [self playerWillDeactivate];
+  // Deactivation is handled by the [AVPlayer currentItem] KVO logic.
 }
 
-//XXX waveforms
 - (void)seekTo:(NSNumber *)position completion:(void (^)(BOOL finished))completion
 {
   CMTimeRange range = self.track.range;
@@ -350,11 +352,13 @@ static void *AVPlayerContext = &AVPlayerContext;
   }];
 }
 
-//XXX waveforms?
+//XXX make waveforms configurable
 - (void)skipBy:(NSNumber *)interval completion:(void (^)(BOOL finished))completion
 {
-  CMTime position = CMTimeAdd(_AVPlayer.currentTime, CMTimeMakeWithSeconds(interval.doubleValue, NSEC_PER_SEC));
-  [self seekTo:@(CMTimeGetSeconds(position)) completion:completion];
+  CMTime target = CMTimeAdd(_AVPlayer.currentTime, CMTimeMakeWithSeconds(interval.doubleValue, NSEC_PER_SEC));
+  CMTime window = CMTimeMakeWithSeconds(fabs(SKIP_INTERVAL_WINDOW_RATIO * interval.doubleValue), NSEC_PER_SEC);
+  target = [self.track seekPositionForTarget:target window:window];
+  [self seekTo:@(CMTimeGetSeconds(target)) completion:completion];
 }
 
 - (void)setRate:(NSNumber *)rate

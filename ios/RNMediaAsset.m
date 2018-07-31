@@ -1,9 +1,16 @@
 #import <React/RCTAssert.h>
+#import <React/RCTConvert.h>
 #import "RNMediaPlayback.h"
+#import "RNMediaWaveform.h"
 #import "RNMediaAsset.h"
 @import AVFoundation;
 
 @implementation RNMediaAsset
+{
+  RNMediaWaveform *_waveform;
+}
+
+#pragma mark - Constructors
 
 + (NSMapTable<NSString *, RNMediaAsset *> *)cache
 {
@@ -54,9 +61,25 @@
   return self;
 }
 
+#pragma mark - Properties
+
 - (BOOL)preciseTiming
 {
   return _AVAsset.providesPreciseDurationAndTiming;
+}
+
+#pragma mark - Waveforms
+
+- (void)setWaveform:(NSDictionary *)data
+{
+  _waveform = [RNMediaWaveform waveformWithData:data];
+}
+
+- (CMTime)seekPositionForTarget:(CMTime)target window:(CMTime)window
+{
+  return _waveform
+    ? [_waveform seekPositionForTarget:target window:window]
+    : target;
 }
 
 @end

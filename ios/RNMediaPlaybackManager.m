@@ -60,6 +60,18 @@ RCT_EXPORT_MODULE(MediaPlaybackManager)
   ];
 }
 
+#pragma mark - Asset Management
+
+RCT_EXPORT_METHOD(setAssetWaveform:(NSString *)id
+                          waveform:(NSDictionary *)waveform
+                          resolver:(RCTPromiseResolveBlock)resolve
+                          rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaAsset *asset = [RNMediaAsset assetForID:id];
+  [asset setWaveform:waveform];
+  resolve(nil);
+}
+
 #pragma mark - Player Management
 
 - (RNMediaPlayer *)playerForKey:(NSNumber *)key
