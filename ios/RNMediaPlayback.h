@@ -1,4 +1,4 @@
-#define PLAYBACK_DEBUG 1
+#define PLAYBACK_DEBUG 0
 
 #if PLAYBACK_DEBUG
 #define LOG(...) NSLog(@"[playback.native] " __VA_ARGS__)
