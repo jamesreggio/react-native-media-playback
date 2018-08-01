@@ -15,6 +15,11 @@ typedef struct {
   NSUInteger upper;
 } RNRange;
 
+NSUInteger getDistance(NSUInteger a, NSUInteger b)
+{
+  return ABS((NSInteger)a - (NSInteger)b);
+}
+
 NSUInteger getRangeSize(RNRange range)
 {
   return range.upper - range.lower;
@@ -26,8 +31,8 @@ NSUInteger getClosestPointInRange(RNRange range, NSUInteger target)
     return target;
   }
 
-  NSUInteger lowerDist = ABS(target - range.lower);
-  NSUInteger upperDist = ABS(target - range.upper);
+  NSUInteger lowerDist = getDistance(target, range.lower);
+  NSUInteger upperDist = getDistance(target, range.upper);
   return lowerDist < upperDist ? range.lower : range.upper;
 }
 
@@ -43,7 +48,7 @@ double getScoreForRange(RNRange range, NSUInteger target, NSUInteger window)
 {
   NSUInteger point = getClosestPointInRange(range, target);
 
-  if (ABS(point - target) >= window) {
+  if (getDistance(point, target) >= window) {
     return 0;
   }
 
