@@ -1,4 +1,5 @@
 #import <React/RCTAssert.h>
+#import <React/RCTUtils.h>
 #import "RNMediaPlaybackManager.h"
 #import "RNMediaPlayback.h"
 #import "RNMediaControls.h"
@@ -147,7 +148,7 @@ RCT_EXPORT_METHOD(createPlayer:(nonnull NSNumber *)key
   [self updateRemote];
   [self sendEventForPlayer:player withName:@"trackFinished" body:@{
     @"id": track.id,
-    @"error": nullNil(error),
+    @"error": error ? RCTJSErrorFromCodeMessageAndNSError(nil, nil, error) : [NSNull null],
     @"position": nullNil(track.position),
   }];
 }

@@ -8,6 +8,8 @@
 
 #define DEFAULT_PITCH_ALGORITHM AVAudioTimePitchAlgorithmLowQualityZeroLatency
 
+static void *AVPlayerItemContext = &AVPlayerItemContext;
+
 CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
 {
   return CMTimeRangeMake(start, CMTimeSubtract(end, start));
@@ -149,6 +151,11 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
                              name:AVPlayerItemFailedToPlayToEndTimeNotification
                            object:_AVPlayerItem];
 
+  [_AVPlayerItem addObserver:self
+                  forKeyPath:@"status"
+                     options:0
+                     context:AVPlayerItemContext];
+
   if (!CMTIMERANGE_IS_INVALID(_range)) {
     // We only attach an observer for the upper end of the range, since it's not possible
     // to rewind past the lower end (and there's nothing we can do if it happens).
@@ -172,9 +179,35 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
   [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_AVPlayerItem];
   [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:_AVPlayerItem];
 
+  @try {
+    [_AVPlayerItem removeObserver:self forKeyPath:@"status" context:AVPlayerItemContext];
+  } @catch (__unused NSException *exception) {
+    // If the subscription doesn't exist, KVO will throw.
+  }
+
   if (_boundaryObserver) {
     [_player.AVPlayer removeTimeObserver:_boundaryObserver];
     _boundaryObserver = nil;
+  }
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary<NSString *,id> *)change
+                       context:(void *)context
+{
+  if (context == AVPlayerItemContext) {
+    RCTAssert(_AVPlayerItem == object, @"Received update for unexpected AVPlayerItem");
+
+    if ([keyPath isEqualToString:@"status"]) {
+      if (_AVPlayerItem.status == AVPlayerItemStatusFailed) {
+        if ([_delegate respondsToSelector:@selector(trackDidFinish:withError:)]) {
+          [_delegate trackDidFinish:self withError:_AVPlayerItem.error];
+        }
+      }
+    }
+  } else {
+    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
   }
 }
 

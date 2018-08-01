@@ -238,6 +238,9 @@ static void *AVPlayerContext = &AVPlayerContext;
   if ([_delegate respondsToSelector:@selector(playerDidFinishTrack:track:withError:)]) {
     [_delegate playerDidFinishTrack:self track:track withError:error];
   }
+  if (error) {
+    [self stop];
+  }
 }
 
 - (void)trackDidFinishRange:(RNMediaTrack *)track withError:(NSError *)error
