@@ -220,7 +220,7 @@ static void *AVPlayerContext = &AVPlayerContext;
 - (void)_playerDidUpdateTrack
 {
   // We may arrive here after the player has been deactivated.
-  if (!_active) {
+  if (!_active || !self.track) {
     return;
   }
 
