@@ -100,8 +100,6 @@ static void *AVPlayerContext = &AVPlayerContext;
 
 - (void)dealloc
 {
-  [self stop];
-
   if (_intervalObserver) {
     [_AVPlayer removeTimeObserver:_intervalObserver];
     _intervalObserver = nil;
@@ -113,6 +111,10 @@ static void *AVPlayerContext = &AVPlayerContext;
   } @catch (__unused NSException *exception) {
     // If the subscription doesn't exist, KVO will throw.
   }
+
+  // We assert inactivity in [RNMediaTrack dealloc] in order to avoid losing track deactivation events
+  // during normal operation, so we need to explicitly deactivate the active track here to avoid throwing.
+  [self.track deactivate];
 }
 
 #pragma mark - Events
