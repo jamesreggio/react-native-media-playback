@@ -6,7 +6,8 @@
 @import AVFoundation;
 @import MediaPlayer;
 
-#define MAX_IMAGE_ATTEMPTS 3
+#define MAX_UPDATE_ATTEMPTS 3
+#define REMOTE_UPDATE_DELAY 1.5 // s
 
 @implementation RNMediaControls
 {
@@ -87,6 +88,11 @@
 
 - (void)updateDetails:(NSDictionary *)details
 {
+  [self updateDetails:details attempt:0];
+}
+
+- (void)updateDetails:(NSDictionary *)details attempt:(NSUInteger)attempt
+{
   MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
 
   NSMutableDictionary *nextDetails;
@@ -115,6 +121,22 @@
   }
 
   center.nowPlayingInfo = nextDetails;
+  NSDictionary *updatedDetails = center.nowPlayingInfo;
+  BOOL updateSuccessful = [nextDetails isEqualToDictionary:updatedDetails];
+
+  if (!updateSuccessful) {
+    NSUInteger nextAttempt = attempt + 1;
+    if (nextAttempt < MAX_UPDATE_ATTEMPTS) {
+      LOG(@"[RNMediaControls updateDetails] retrying");
+      __weak typeof(self) weakSelf = self;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, REMOTE_UPDATE_DELAY * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        [weakSelf updateDetails:details attempt:nextAttempt];
+      });
+    } else {
+      LOG(@"[RNMediaControls updateDetails] failed");
+    }
+    return;
+  }
 
   if (updateArtwork) {
     _artwork = artwork;
@@ -127,14 +149,16 @@
   [self updateArtwork:0];
 }
 
-- (void)updateArtwork:(uint)attempt
+- (void)updateArtwork:(NSUInteger)attempt
 {
-  if (attempt >= MAX_IMAGE_ATTEMPTS) {
+  if (attempt >= MAX_UPDATE_ATTEMPTS) {
+    LOG(@"[RNMediaControls resetDetails] failed");
     return;
+  } else if (attempt > 0) {
+    LOG(@"[RNMediaControls resetDetails] retrying");
   }
 
-  uint delayInSeconds = 1.5; // Delay necessary to prevent `nowPlayingInfo` assignment from being a no-op.
-  dispatch_time_t dispatchTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
+  dispatch_time_t dispatchTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(REMOTE_UPDATE_DELAY * NSEC_PER_SEC));
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
     NSString *url = _artwork;
     UIImage *image = nil;
@@ -184,8 +208,31 @@
 
 - (void)resetDetails
 {
+  [self resetDetailsAttempt:0];
+}
+
+- (void)resetDetailsAttempt:(NSUInteger)attempt
+{
   MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
+
   center.nowPlayingInfo = nil;
+  NSDictionary *updatedDetails = center.nowPlayingInfo;
+  BOOL updateSuccessful = (updatedDetails == nil || updatedDetails.count == 0);
+
+  if (!updateSuccessful) {
+    NSUInteger nextAttempt = attempt + 1;
+    if (nextAttempt < MAX_UPDATE_ATTEMPTS) {
+      LOG(@"[RNMediaControls resetDetails] retrying");
+      __weak typeof(self) weakSelf = self;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, REMOTE_UPDATE_DELAY * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        [weakSelf resetDetailsAttempt:nextAttempt];
+      });
+    } else {
+      LOG(@"[RNMediaControls resetDetails] failed");
+    }
+    return;
+  }
+
   _artwork = nil;
 }
 
