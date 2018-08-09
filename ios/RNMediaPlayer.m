@@ -27,6 +27,9 @@ static void *AVPlayerContext = &AVPlayerContext;
   BOOL _preciseTiming;
   BOOL _active;
   float _rate;
+
+  NSUInteger _playRequest;
+  BOOL _updateQueued;
 }
 
 #pragma mark - AVFoundation Enumerations
@@ -58,6 +61,9 @@ static void *AVPlayerContext = &AVPlayerContext;
     _session = [RNMediaSession sessionWithOptions:options];
     _AVPlayer = [AVQueuePlayer queuePlayerWithItems:[NSArray array]];
     _active = NO;
+
+    _playRequest = 0;
+    _updateQueued = NO;
 
     // Process options.
 
@@ -206,27 +212,28 @@ static void *AVPlayerContext = &AVPlayerContext;
 
 - (void)playerDidUpdateTrack
 {
-  static BOOL queued = NO;
-  if (queued) {
+  if (_updateQueued) {
     return;
   }
 
-  queued = YES;
+  _updateQueued = YES;
   __weak typeof(self) weakSelf = self;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, RAPID_UPDATE_DEBOUNCE_INTERVAL * NSEC_PER_MSEC), _methodQueue, ^{
-    queued = NO;
-    [weakSelf _playerDidUpdateTrack];
+    typeof(self) strongSelf = weakSelf;
+    if (strongSelf) {
+      strongSelf->_updateQueued = NO;
+      [strongSelf _playerDidUpdateTrack];
+    }
   });
 }
 
 - (void)_playerDidUpdateTrack
 {
-  // We may arrive here after the player has been deactivated.
-  if (!_active || !self.track) {
+  // We may arrive here after the player's queue has been purged.
+  if (!self.track) {
     return;
   }
 
-  RCTAssert(self.track, @"Expected track to update");
   LOG(@"[RNMediaPlayer playerDidUpdateTrack] %@ %@", self.key, self.track.id);
   if ([_delegate respondsToSelector:@selector(playerDidUpdateTrack:track:)]) {
     [_delegate playerDidUpdateTrack:self track:self.track];
@@ -252,7 +259,9 @@ static void *AVPlayerContext = &AVPlayerContext;
   if ([_delegate respondsToSelector:@selector(playerDidFinishTrack:track:withError:)]) {
     [_delegate playerDidFinishTrack:self track:track withError:error];
   }
-  [self nextTrack];
+  if (_AVPlayer.actionAtItemEnd == AVPlayerActionAtItemEndAdvance) {
+    [self nextTrack];
+  }
 }
 
 #pragma mark - Tracks
@@ -281,6 +290,10 @@ static void *AVPlayerContext = &AVPlayerContext;
       [self nextTrack];
       RCTAssert(_AVPlayer.currentItem == firstItem, @"Expected next AVPlayerItem to be the first");
     }
+  }
+
+  if ([nilNull(options[@"activate"]) boolValue]) {
+    [self playerWillActivate];
   }
 
   if ([nilNull(options[@"play"]) boolValue]) {
@@ -312,6 +325,50 @@ static void *AVPlayerContext = &AVPlayerContext;
 #pragma mark - Playback
 
 - (void)play
+{
+  ++_playRequest;
+  [self _play];
+}
+
+- (void)playWithOptions:(NSDictionary *)options
+{
+  NSUInteger playRequest = ++_playRequest;
+
+  __weak typeof(self) weakSelf = self;
+  void (^playBlock)(void) = ^() {
+    [weakSelf _play];
+  };
+
+  if (options) {
+    NSNumber *duration = nilNull(options[@"duration"]);
+    if (duration) {
+      playBlock = ^() {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (duration.doubleValue / _rate) * NSEC_PER_SEC), _methodQueue, ^{
+          typeof(self) strongSelf = weakSelf;
+          if (strongSelf) {
+            if (playRequest == strongSelf->_playRequest) {
+              [weakSelf pause];
+            }
+          }
+        });
+
+        [weakSelf _play];
+      };
+    }
+
+    NSNumber *position = nilNull(options[@"position"]);
+    if (position) {
+      [self seekTo:position completion:^(__unused BOOL finished) {
+        playBlock();
+      }];
+      return;
+    }
+  }
+
+  playBlock();
+}
+
+- (void)_play
 {
   [self playerWillActivate];
   _AVPlayer.rate = _rate;
@@ -374,6 +431,11 @@ static void *AVPlayerContext = &AVPlayerContext;
   }
   _rate = rate.floatValue;
   [self playerDidUpdateTrack];
+}
+
+- (void)setRange:(NSDictionary *)range
+{
+  [self.track setRange:range];
 }
 
 #pragma mark - Properties

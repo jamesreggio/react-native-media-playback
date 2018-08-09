@@ -82,8 +82,8 @@ export default class Player {
    * Playback controls.
    */
 
-  play() {
-    return NativeModule.playPlayer(this.key);
+  play(options = {}) {
+    return NativeModule.playPlayer(this.key, options);
   }
 
   pause() {
@@ -108,5 +108,9 @@ export default class Player {
 
   setRate(rate) {
     return NativeModule.setPlayerRate(this.key, rate);
+  }
+
+  setRange(range) {
+    return NativeModule.setPlayerRange(this.key, range);
   }
 }

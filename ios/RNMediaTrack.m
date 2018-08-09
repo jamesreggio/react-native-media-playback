@@ -94,17 +94,7 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
       _AVPlayerItem.preferredForwardBufferDuration = buffer.doubleValue;
     }
 
-    NSDictionary *range = nilNull(options[@"range"]);
-    if (range) {
-      NSNumber *lower = nilNull(range[@"lower"]);
-      NSNumber *upper = nilNull(range[@"upper"]);
-      _range = CMTimeRangeMakeFromBounds(
-        lower ? CMTimeMakeWithSeconds(lower.doubleValue, NSEC_PER_SEC) : kCMTimeZero,
-        upper ? CMTimeMakeWithSeconds(upper.doubleValue, NSEC_PER_SEC) : kCMTimePositiveInfinity
-      );
-    } else {
-      _range = kCMTimeRangeInvalid;
-    }
+    _range = [self convertRange:nilNull(options[@"range"])];
   }
   return self;
 }
@@ -156,6 +146,32 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
                      options:0
                      context:AVPlayerItemContext];
 
+  [self addRangeListeners];
+}
+
+- (void)removeListeners
+{
+  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_AVPlayerItem];
+  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:_AVPlayerItem];
+
+  @try {
+    [_AVPlayerItem removeObserver:self forKeyPath:@"status" context:AVPlayerItemContext];
+  } @catch (__unused NSException *exception) {
+    // If the subscription doesn't exist, KVO will throw.
+  }
+
+  [self removeRangeListeners];
+}
+
+- (void)updateRangeListeners
+{
+  [self removeRangeListeners];
+  [self addRangeListeners];
+}
+
+- (void)addRangeListeners
+{
   if (!CMTIMERANGE_IS_INVALID(_range)) {
     // We only attach an observer for the upper end of the range, since it's not possible
     // to rewind past the lower end (and there's nothing we can do if it happens).
@@ -173,18 +189,8 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
   }
 }
 
-- (void)removeListeners
+- (void)removeRangeListeners
 {
-  NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-  [notificationCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_AVPlayerItem];
-  [notificationCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:_AVPlayerItem];
-
-  @try {
-    [_AVPlayerItem removeObserver:self forKeyPath:@"status" context:AVPlayerItemContext];
-  } @catch (__unused NSException *exception) {
-    // If the subscription doesn't exist, KVO will throw.
-  }
-
   if (_boundaryObserver) {
     [_player.AVPlayer removeTimeObserver:_boundaryObserver];
     _boundaryObserver = nil;
@@ -271,6 +277,28 @@ CMTimeRange CMTimeRangeMakeFromBounds(CMTime start, CMTime end)
 - (CMTime)seekPositionForTarget:(CMTime)target window:(CMTime)window
 {
   return [_asset seekPositionForTarget:target window:window];
+}
+
+#pragma mark - Ranges
+
+- (void)setRange:(NSDictionary *)range
+{
+  _range = [self convertRange:range];
+  [self updateRangeListeners];
+}
+
+- (CMTimeRange)convertRange:(NSDictionary *)range
+{
+  if (range) {
+    NSNumber *lower = nilNull(range[@"lower"]);
+    NSNumber *upper = nilNull(range[@"upper"]);
+    return CMTimeRangeMakeFromBounds(
+                                     lower ? CMTimeMakeWithSeconds(lower.doubleValue, NSEC_PER_SEC) : kCMTimeZero,
+                                     upper ? CMTimeMakeWithSeconds(upper.doubleValue, NSEC_PER_SEC) : kCMTimePositiveInfinity
+                                     );
+  } else {
+    return kCMTimeRangeInvalid;
+  }
 }
 
 @end

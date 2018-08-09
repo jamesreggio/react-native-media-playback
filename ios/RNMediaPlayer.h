@@ -41,12 +41,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)nextTrack;
 
 - (void)play;
+- (void)playWithOptions:(NSDictionary *)options;
 - (void)pause;
 - (void)toggle;
 - (void)stop;
 - (void)seekTo:(NSNumber *)position completion:(void (^__nullable)(BOOL))completion;
 - (void)skipBy:(NSNumber *)interval completion:(void (^__nullable)(BOOL))completion;
 - (void)setRate:(NSNumber *)rate;
+- (void)setRange:(NSDictionary *)range;
 
 @end
 

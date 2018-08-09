@@ -190,11 +190,12 @@ RCT_EXPORT_METHOD(nextPlayerTrack:(nonnull NSNumber *)key
 #pragma mark - Playback Controls
 
 RCT_EXPORT_METHOD(playPlayer:(nonnull NSNumber *)key
+                     options:(NSDictionary *)options
                     resolver:(RCTPromiseResolveBlock)resolve
                     rejecter:(RCTPromiseRejectBlock)reject)
 {
   RNMediaPlayer *player = [self playerForKey:key];
-  [player play];
+  [player playWithOptions:options];
   resolve(nil);
 }
 
@@ -254,6 +255,16 @@ RCT_EXPORT_METHOD(setPlayerRate:(nonnull NSNumber *)key
 {
   RNMediaPlayer *player = [self playerForKey:key];
   [player setRate:rate];
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(setPlayerRange:(nonnull NSNumber *)key
+                           range:(NSDictionary *)range
+                        resolver:(RCTPromiseResolveBlock)resolve
+                        rejecter:(RCTPromiseRejectBlock)reject)
+{
+  RNMediaPlayer *player = [self playerForKey:key];
+  [player setRange:range];
   resolve(nil);
 }
 

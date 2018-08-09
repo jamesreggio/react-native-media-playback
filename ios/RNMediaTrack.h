@@ -35,6 +35,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)enqueued;
 - (void)activate;
 - (void)deactivate;
+
+- (void)setRange:(NSDictionary *)range;
 - (CMTime)seekPositionForTarget:(CMTime)target window:(CMTime)window;
 
 @end
