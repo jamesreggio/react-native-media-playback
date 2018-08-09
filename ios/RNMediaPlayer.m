@@ -23,12 +23,12 @@ static void *AVPlayerContext = &AVPlayerContext;
 @implementation RNMediaPlayer
 {
   RNMediaSession *_session;
-  id _intervalObserver;
   BOOL _preciseTiming;
   BOOL _active;
   float _rate;
 
-  NSUInteger _playRequest;
+  id _intervalObserver;
+  id _boundaryObserver;
   BOOL _updateQueued;
 }
 
@@ -61,8 +61,6 @@ static void *AVPlayerContext = &AVPlayerContext;
     _session = [RNMediaSession sessionWithOptions:options];
     _AVPlayer = [AVQueuePlayer queuePlayerWithItems:[NSArray array]];
     _active = NO;
-
-    _playRequest = 0;
     _updateQueued = NO;
 
     // Process options.
@@ -109,6 +107,11 @@ static void *AVPlayerContext = &AVPlayerContext;
   if (_intervalObserver) {
     [_AVPlayer removeTimeObserver:_intervalObserver];
     _intervalObserver = nil;
+  }
+
+  if (_boundaryObserver) {
+    [_AVPlayer removeTimeObserver:_boundaryObserver];
+    _boundaryObserver = nil;
   }
 
   @try {
@@ -259,8 +262,15 @@ static void *AVPlayerContext = &AVPlayerContext;
   if ([_delegate respondsToSelector:@selector(playerDidFinishTrack:track:withError:)]) {
     [_delegate playerDidFinishTrack:self track:track withError:error];
   }
-  if (_AVPlayer.actionAtItemEnd == AVPlayerActionAtItemEndAdvance) {
-    [self nextTrack];
+  switch (_AVPlayer.actionAtItemEnd) {
+    case AVPlayerActionAtItemEndAdvance:
+      [self nextTrack];
+      break;
+    case AVPlayerActionAtItemEndPause:
+      [self pause];
+      break;
+    case AVPlayerActionAtItemEndNone:
+      break;
   }
 }
 
@@ -326,13 +336,13 @@ static void *AVPlayerContext = &AVPlayerContext;
 
 - (void)play
 {
-  ++_playRequest;
+  [self _prepareToPlay];
   [self _play];
 }
 
 - (void)playWithOptions:(NSDictionary *)options
 {
-  NSUInteger playRequest = ++_playRequest;
+  [self _prepareToPlay];
 
   __weak typeof(self) weakSelf = self;
   void (^playBlock)(void) = ^() {
@@ -340,23 +350,23 @@ static void *AVPlayerContext = &AVPlayerContext;
   };
 
   if (options) {
+    NSNumber *position = nilNull(options[@"position"]);
     NSNumber *duration = nilNull(options[@"duration"]);
+
     if (duration) {
+      CMTime startTime = position ? CMTimeMakeWithSeconds(position.doubleValue, NSEC_PER_SEC) : _AVPlayer.currentTime;
+      CMTime pauseTime = CMTimeAdd(startTime, CMTimeMakeWithSeconds(duration.doubleValue, NSEC_PER_SEC));
+      NSArray<NSValue *> *boundaries = @[[NSValue valueWithCMTime:pauseTime]];
+
       playBlock = ^() {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (duration.doubleValue / _rate) * NSEC_PER_SEC), _methodQueue, ^{
-          typeof(self) strongSelf = weakSelf;
-          if (strongSelf) {
-            if (playRequest == strongSelf->_playRequest) {
-              [weakSelf pause];
-            }
-          }
-        });
+        _boundaryObserver = [_AVPlayer addBoundaryTimeObserverForTimes:boundaries queue:_methodQueue usingBlock:^{
+          [weakSelf pause];
+        }];
 
         [weakSelf _play];
       };
     }
 
-    NSNumber *position = nilNull(options[@"position"]);
     if (position) {
       [self seekTo:position completion:^(__unused BOOL finished) {
         playBlock();
@@ -368,9 +378,17 @@ static void *AVPlayerContext = &AVPlayerContext;
   playBlock();
 }
 
-- (void)_play
+- (void)_prepareToPlay
 {
   [self playerWillActivate];
+  if (_boundaryObserver) {
+    [_AVPlayer removeTimeObserver:_boundaryObserver];
+    _boundaryObserver = nil;
+  }
+}
+
+- (void)_play
+{
   _AVPlayer.rate = _rate;
 }
 
