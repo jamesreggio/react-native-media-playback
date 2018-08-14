@@ -268,6 +268,7 @@ static void *AVPlayerContext = &AVPlayerContext;
       break;
     case AVPlayerActionAtItemEndPause:
       [self pause];
+      [self seekTo:@(0) completion:nil];
       break;
     case AVPlayerActionAtItemEndNone:
       break;
