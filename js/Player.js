@@ -31,7 +31,7 @@ export default class Player {
    */
 
   static addListener(type, callback) {
-    NativeEvents.addListener(type, callback);
+    return NativeEvents.addListener(type, callback);
   }
 
   static removeListener(subscription) {
