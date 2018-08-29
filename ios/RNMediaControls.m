@@ -204,7 +204,7 @@
           center.nowPlayingInfo = nextDetails;
 
           if (!center.nowPlayingInfo[MPMediaItemPropertyArtwork]) {
-            [self updateArtwork:(attempt + 1)];
+            [self updateArtworkAttempt:(attempt + 1)];
           }
         }
       });
