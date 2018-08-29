@@ -88,7 +88,10 @@
 
 - (void)updateDetails:(NSDictionary *)details
 {
-  [self updateDetails:details attempt:0];
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf updateDetails:details attempt:0];
+  });
 }
 
 - (void)updateDetails:(NSDictionary *)details attempt:(NSUInteger)attempt
@@ -146,10 +149,13 @@
 
 - (void)updateArtwork
 {
-  [self updateArtwork:0];
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf updateArtworkAttempt:0];
+  });
 }
 
-- (void)updateArtwork:(NSUInteger)attempt
+- (void)updateArtworkAttempt:(NSUInteger)attempt
 {
   if (attempt >= MAX_UPDATE_ATTEMPTS) {
     LOG(@"[RNMediaControls resetDetails] failed");
@@ -208,7 +214,10 @@
 
 - (void)resetDetails
 {
-  [self resetDetailsAttempt:0];
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf resetDetailsAttempt:0];
+  });
 }
 
 - (void)resetDetailsAttempt:(NSUInteger)attempt
@@ -242,22 +251,23 @@
 {
   // This is an absurdly hacky way to display the AirPlay selection popover.
   // https://stackoverflow.com/a/15583062
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIViewController *presentedController = RCTPresentedViewController();
+    UIView *presentedView = presentedController.view;
 
-  UIViewController *presentedController = RCTPresentedViewController();
-  UIView *presentedView = presentedController.view;
+    MPVolumeView *volumeView = [[MPVolumeView alloc] initWithFrame:CGRectZero];
+    volumeView.hidden = YES;
+    [presentedView addSubview:volumeView];
 
-  MPVolumeView *volumeView = [[MPVolumeView alloc] initWithFrame:CGRectZero];
-  volumeView.hidden = YES;
-  [presentedView addSubview:volumeView];
-
-  for (UIButton *button in volumeView.subviews) {
-    if ([button isKindOfClass:[UIButton class]]) {
-      [button sendActionsForControlEvents:UIControlEventTouchUpInside];
-      break;
+    for (UIButton *button in volumeView.subviews) {
+      if ([button isKindOfClass:[UIButton class]]) {
+        [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+        break;
+      }
     }
-  }
 
-  [volumeView removeFromSuperview];
+    [volumeView removeFromSuperview];
+  });
 }
 
 - (NSArray<NSDictionary *> *)outputRoutes
@@ -278,12 +288,18 @@
 
 - (void)addListeners
 {
-  [self toggleListeners:YES];
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf toggleListeners:YES];
+  });
 }
 
 - (void)removeListeners
 {
-  [self toggleListeners:NO];
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf toggleListeners:NO];
+  });
 }
 
 - (void)toggleListeners:(BOOL)enabled
@@ -294,11 +310,9 @@
   [self toggleCommandHandler:commandCenter.pauseCommand enabled:enabled selector:@selector(onPause:)];
   [self toggleCommandHandler:commandCenter.togglePlayPauseCommand enabled:enabled selector:@selector(onToggle:)];
   [self toggleCommandHandler:commandCenter.stopCommand enabled:enabled selector:@selector(onStop:)];
+  [self toggleCommandHandler:commandCenter.changePlaybackPositionCommand enabled:enabled selector:@selector(onSeek:)];
   [self toggleCommandHandler:commandCenter.seekForwardCommand enabled:enabled selector:@selector(onSeekForward:)];
   [self toggleCommandHandler:commandCenter.seekBackwardCommand enabled:enabled selector:@selector(onSeekBackward:)];
-  [self toggleCommandHandler:commandCenter.changePlaybackPositionCommand enabled:enabled selector:@selector(onSeek:)];
-  [self toggleCommandHandler:commandCenter.nextTrackCommand enabled:enabled selector:@selector(onNextTrack:)];
-  [self toggleCommandHandler:commandCenter.previousTrackCommand enabled:enabled selector:@selector(onPrevTrack:)];
 
   {
     MPSkipIntervalCommand *command = commandCenter.skipForwardCommand;
@@ -311,6 +325,9 @@
     command.preferredIntervals = @[@(SKIP_BACKWARD_INTERVAL)];
     [self toggleCommandHandler:command enabled:enabled selector:@selector(onSkipBackward:)];
   }
+
+  [self toggleCommandHandler:commandCenter.nextTrackCommand enabled:enabled selector:@selector(onNextTrack:)];
+  [self toggleCommandHandler:commandCenter.previousTrackCommand enabled:enabled selector:@selector(onPrevTrack:)];
 
   [self toggleNotificationHandler:AVAudioSessionRouteChangeNotification enabled:enabled selector:@selector(onRouteChange:)];
   [self toggleNotificationHandler:AVAudioSessionInterruptionNotification enabled:enabled selector:@selector(onInterrupt:)];
